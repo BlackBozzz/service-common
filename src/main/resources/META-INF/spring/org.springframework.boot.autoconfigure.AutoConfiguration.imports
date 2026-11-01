@@ -1,2 +1,3 @@
 com.argent.servicecommon.config.ServiceCommonAutoConfiguration
 com.argent.servicecommon.dictionary.config.DictionaryRegistrationAutoConfiguration
+com.argent.servicecommon.dictionary.config.DictionaryDtoAutoConfiguration
