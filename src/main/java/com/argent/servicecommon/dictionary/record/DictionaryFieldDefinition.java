@@ -3,7 +3,9 @@ package com.argent.servicecommon.dictionary.record;
 import java.util.List;
 import java.util.Map;
 
-/** Описание поля справочника для построения динамической формы. */
+/**
+ * Описание поля справочника для построения динамической формы.
+ */
 public record DictionaryFieldDefinition(
         String name,
         String label,
@@ -19,6 +21,9 @@ public record DictionaryFieldDefinition(
         List<ValidationRule> validation,
         List<ValidationRule> elementValidation
 ) {
-    /** Ограничение Bean Validation, доступное для фронтенда. */
-    public record ValidationRule(String name, Map<String, Object> attributes) { }
+    /**
+     * Ограничение Bean Validation, доступное для фронтенда.
+     */
+    public record ValidationRule(String name, Map<String, Object> attributes) {
+    }
 }
