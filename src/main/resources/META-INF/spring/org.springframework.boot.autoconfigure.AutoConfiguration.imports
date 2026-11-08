@@ -8,3 +8,7 @@ com.argent.servicecommon.error.config.ErrorAutoConfiguration
 com.argent.servicecommon.security.config.SecurityAutoConfiguration
 com.argent.servicecommon.security.config.SecurityWebAutoConfiguration
 com.argent.servicecommon.auth.config.AuthAutoConfiguration
+com.argent.servicecommon.transfer.config.TransferAutoConfiguration
+com.argent.servicecommon.status.config.StatusAutoConfiguration
+com.argent.servicecommon.sequence.config.SequenceAutoConfiguration
+com.argent.servicecommon.audit.config.AuditAutoConfiguration

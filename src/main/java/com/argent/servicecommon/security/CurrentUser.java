@@ -57,6 +57,17 @@ public final class CurrentUser {
     }
 
     /**
+     * Логин из claim {@code login} токена текущего запроса или пустое значение, если запрос
+     * анонимный или аутентифицирован не JWT.
+     */
+    public static Optional<String> login() {
+        return authentication()
+                .filter(JwtAuthenticationToken.class::isInstance)
+                .map(authentication -> ((JwtAuthenticationToken) authentication).getToken()
+                        .getClaimAsString(TokenService.LOGIN_CLAIM));
+    }
+
+    /**
      * Authorities вошедшего пользователя ({@code table:<t>:<op>}, {@code action:<a>}); для анонимного
      * запроса — пустое множество. Служебные authorities Spring Security о факторах аутентификации
      * не включаются.

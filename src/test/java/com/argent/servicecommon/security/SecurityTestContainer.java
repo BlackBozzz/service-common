@@ -17,7 +17,9 @@ public final class SecurityTestContainer {
             .withDatabaseName("argent_security_tests")
             .withUsername("test")
             .withPassword("test")
-            .withInitScript("db/security-test-init.sql");
+            .withInitScript("db/security-test-init.sql")
+            // Контексты тестов кэшируются вместе с пулами подключений: запас для всех классов.
+            .withCommand("postgres", "-c", "max_connections=300");
 
     static {
         POSTGRES.start();
@@ -34,6 +36,8 @@ public final class SecurityTestContainer {
         });
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "3");
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "0");
         registry.add("spring.flyway.locations", () -> "classpath:db/migration/app");
         registry.add("spring.flyway.schemas", () -> schema);
         registry.add("spring.flyway.default-schema", () -> schema);

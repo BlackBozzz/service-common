@@ -16,6 +16,8 @@
     <packaging>jar</packaging>
     <properties>
         <java.version>21</java.version>
+        <poi.version>5.5.1</poi.version>
+        <commons-csv.version>1.14.1</commons-csv.version>
     </properties>
     <dependencies>
         <!-- Поддержка автоконфигурации Spring Boot -->
@@ -142,6 +144,20 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Apache POI: чтение и запись XLSX и DOCX (импорт/экспорт справочников) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+
+        <!-- Чтение и запись CSV -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+
         <!-- Тестовые средства Spring Security -->
         <dependency>
             <groupId>org.springframework.security</groupId>
@@ -151,6 +167,25 @@
     </dependencies>
     <build>
         <plugins>
+            <!-- Процессоры аннотаций: Lombok, метаданные свойств -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                            <version>${spring-boot.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
             <!-- Настройка запуска тестов на Windows -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

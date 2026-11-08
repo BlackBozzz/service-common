@@ -99,8 +99,10 @@ class DictionaryCrudIntegrationTest {
     @Test
     void shouldRegisterAllCrudFixtures() {
         assertThat(service).isNotNull();
+        // Библиотечные справочники (common_*) регистрирует миграция V4 — исключаем их.
         Set<String> codes = registryRepository.findAll().stream()
                 .map(CommonDictionary::getCode)
+                .filter(code -> !code.startsWith("common_"))
                 .collect(Collectors.toSet());
         assertThat(codes).containsExactlyInAnyOrder(
                 "crud_countries", "crud_cities", "crud_categories", "crud_regions",

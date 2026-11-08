@@ -140,12 +140,16 @@ class DictionarySchemaIntegrationTest {
     /** Проверяем, что Spring Boot + Flyway зарегистрировали все тестовые справочники. */
     @Test
     void shouldRegisterAllDictionaries() {
-        assertThat(repository.findAll().stream().map(CommonDictionary::getCode).collect(Collectors.toSet()))
+        // Библиотечные справочники (common_*) регистрирует миграция V4 — исключаем их.
+        var registered = repository.findAll().stream()
+                .filter(row -> !row.getCode().startsWith("common_"))
+                .toList();
+        assertThat(registered.stream().map(CommonDictionary::getCode).collect(Collectors.toSet()))
                 .containsExactlyInAnyOrderElementsOf(Set.of(
                         "it_countries", "it_cities", "it_categories", "it_city_profiles",
                         "it_documents", "it_regions", "it_groups", "it_cycle_a", "it_cycle_b"
                 ));
-        assertThat(repository.findAll()).allSatisfy(row -> {
+        assertThat(registered).allSatisfy(row -> {
             assertThat(row.getGeneratedAt()).isNotNull();
             assertThat(row.getDtoClass()).contains(".integration.dto.");
         });

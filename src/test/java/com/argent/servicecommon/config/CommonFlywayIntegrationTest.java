@@ -15,6 +15,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,13 +74,15 @@ class CommonFlywayIntegrationTest {
                 String.class, SCHEMA);
         assertThat(tables).contains(
                 "common_dictionaries", "common_user", "common_user_session", "common_role",
-                "common_user_role", "common_schema_history", "flyway_schema_history");
+                "common_user_role", "common_schema_history", "flyway_schema_history",
+                "common_status_type", "common_status", "common_status_transition",
+                "common_sequence", "common_audit_entry");
         assertThat(tables).doesNotContain("common_permission", "common_role_permission");
 
         List<String> libraryVersions = jdbc.queryForList(
                 "SELECT version FROM " + SCHEMA + ".common_schema_history WHERE version IS NOT NULL",
                 String.class);
-        assertThat(libraryVersions).containsExactlyInAnyOrder("1", "2", "3");
+        assertThat(libraryVersions).containsExactlyInAnyOrder("1", "2", "3", "4");
 
         List<String> appVersions = jdbc.queryForList(
                 "SELECT version FROM " + SCHEMA + ".flyway_schema_history WHERE version IS NOT NULL",
@@ -94,7 +97,8 @@ class CommonFlywayIntegrationTest {
 
     @Test
     void shouldUseUuidPrimaryKeys() {
-        for (String table : List.of("common_user", "common_role")) {
+        for (String table : List.of("common_user", "common_role", "common_status_type", "common_status",
+                "common_status_transition", "common_sequence", "common_audit_entry")) {
             String type = jdbc.queryForObject(
                     "SELECT data_type FROM information_schema.columns "
                             + "WHERE table_schema = ? AND table_name = ? AND column_name = 'id'",
@@ -110,5 +114,29 @@ class CommonFlywayIntegrationTest {
                         + "WHERE table_schema = ? AND table_name = 'common_role' AND column_name = 'grants'",
                 String.class, SCHEMA);
         assertThat(type).isEqualTo("jsonb");
+    }
+
+    @Test
+    void shouldRegisterLibraryDictionariesInMigration() {
+        // В контекст этого теста попадают и тестовые справочники других пакетов — проверяем только библиотечные.
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT code, entity_class, dto_class FROM common_dictionaries WHERE code IN (?, ?, ?, ?)",
+                "common_status_type", "common_status", "common_status_transition", "common_sequence");
+        assertThat(rows).hasSize(4);
+        assertThat(rows).extracting(row -> row.get("entity_class")).containsExactlyInAnyOrder(
+                "CommonStatusType", "CommonStatus", "CommonStatusTransition", "CommonSequence");
+        assertThat(rows).extracting(row -> row.get("dto_class")).containsExactlyInAnyOrder(
+                "com.argent.servicecommon.status.dto.CommonStatusTypeDto",
+                "com.argent.servicecommon.status.dto.CommonStatusDto",
+                "com.argent.servicecommon.status.dto.CommonStatusTransitionDto",
+                "com.argent.servicecommon.sequence.dto.CommonSequenceDto");
+    }
+
+    @Test
+    void shouldIndexAuditEntriesByEntityAndTime() {
+        List<String> indexes = jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = ? AND tablename = 'common_audit_entry'",
+                String.class, SCHEMA);
+        assertThat(indexes).anyMatch(def -> def.contains("(entity_type, entity_id, created_at)"));
     }
 }

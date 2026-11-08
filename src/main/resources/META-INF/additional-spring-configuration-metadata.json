@@ -9,6 +9,11 @@
       "name": "argent.security",
       "type": "com.argent.servicecommon.security.SecurityProperties",
       "description": "Настройки цепочки фильтров безопасности."
+    },
+    {
+      "name": "argent.transfer",
+      "type": "com.argent.servicecommon.transfer.TransferProperties",
+      "description": "Настройки импорта и экспорта таблиц: лимиты загружаемых файлов и строк, стратегия ошибок импорта."
     }
   ],
   "properties": [
@@ -89,6 +94,36 @@
       "type": "java.util.List<java.lang.String>",
       "description": "Коды действий приложения для каталога подсказок GET /api/grants/catalog в редакторе ролей (действие admin добавляется всегда). На проверку прав не влияет.",
       "defaultValue": []
+    },
+    {
+      "name": "argent.transfer.max-upload-bytes",
+      "type": "java.lang.Long",
+      "description": "Наибольший размер загружаемого файла импорта в байтах (больше — 400 «Файл превышает допустимый размер»). Распакованный XLSX (сумма элементов ZIP и каждый элемент) ограничен max-upload-bytes × 8, не меньше 10 МБ (больше — 400 «Распакованный XLSX превышает допустимый размер»). Должен быть больше нуля и не больше 536870911. Лимиты multipart Spring (spring.servlet.multipart.max-file-size и max-request-size, по умолчанию 1 МБ) нужно поднять отдельно.",
+      "defaultValue": 20971520
+    },
+    {
+      "name": "argent.transfer.max-rows",
+      "type": "java.lang.Integer",
+      "description": "Наибольшее число строк данных на лист импорта и наибольшее число строк экспорта. Должно быть больше нуля.",
+      "defaultValue": 100000
+    },
+    {
+      "name": "argent.transfer.import-on-error",
+      "type": "com.argent.servicecommon.transfer.TransferProperties$ImportOnError",
+      "description": "Стратегия ошибочных строк импорта: fail-all — лист импортируется целиком или отменяется с отчётом обо всех ошибках; skip-row — ошибочные строки пропускаются и попадают в отчёт. Ошибка базы данных при записи отменяет лист при любой стратегии.",
+      "defaultValue": "fail-all"
+    },
+    {
+      "name": "argent.transfer.export-max-columns",
+      "type": "java.lang.Integer",
+      "description": "Наибольшее число колонок экспорта (POST /api/export/{format} и выгрузка справочника). Больше — 400 «Слишком много колонок: <n>, допустимо не более <лимит>». Должно быть больше нуля.",
+      "defaultValue": 1000
+    },
+    {
+      "name": "argent.transfer.export-max-cells",
+      "type": "java.lang.Long",
+      "description": "Наибольшее число ячеек экспорта: строки × колонки. Больше — 400 «Слишком много ячеек: <n>, допустимо не более <лимит>». Должно быть больше нуля.",
+      "defaultValue": 2000000
     }
   ],
   "hints": [
@@ -102,6 +137,19 @@
         {
           "value": "overwrite",
           "description": "Приводить имя, описание и гранты существующих ролей к содержимому файла."
+        }
+      ]
+    },
+    {
+      "name": "argent.transfer.import-on-error",
+      "values": [
+        {
+          "value": "fail-all",
+          "description": "Одна транзакция на лист: при любой ошибке лист откатывается, отчёт содержит все ошибки."
+        },
+        {
+          "value": "skip-row",
+          "description": "Ошибочные строки пропускаются и попадают в отчёт, остальные сохраняются."
         }
       ]
     }

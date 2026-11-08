@@ -23,7 +23,11 @@ import javax.sql.DataSource;
         basePackages = {
                 "com.argent.servicecommon.dictionary",
                 "com.argent.servicecommon.auth",
-                "com.argent.servicecommon.security"
+                "com.argent.servicecommon.security",
+                "com.argent.servicecommon.status",
+                "com.argent.servicecommon.sequence",
+                "com.argent.servicecommon.audit",
+                "com.argent.servicecommon.transfer"
         }
 )
 public class ServiceCommonAutoConfiguration {
