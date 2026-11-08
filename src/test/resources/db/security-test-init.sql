@@ -1,0 +1,10 @@
+-- Схемы создаются до запуска Flyway.
+CREATE SCHEMA IF NOT EXISTS it_security;
+CREATE SCHEMA IF NOT EXISTS it_security_chain;
+CREATE SCHEMA IF NOT EXISTS it_auth_pwdless;
+CREATE SCHEMA IF NOT EXISTS it_auth_pwd;
+CREATE SCHEMA IF NOT EXISTS it_auth_nopwd;
+CREATE SCHEMA IF NOT EXISTS it_admin;
+CREATE SCHEMA IF NOT EXISTS it_grants;
+CREATE SCHEMA IF NOT EXISTS it_seed;
+CREATE SCHEMA IF NOT EXISTS it_dict_url;

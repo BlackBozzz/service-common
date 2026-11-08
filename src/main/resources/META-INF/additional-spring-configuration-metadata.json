@@ -1,0 +1,109 @@
+{
+  "groups": [
+    {
+      "name": "argent.auth",
+      "type": "com.argent.servicecommon.auth.AuthProperties",
+      "description": "Настройки аутентификации: вход, регистрация, bootstrap-администратор, сессии и ключ JWT."
+    },
+    {
+      "name": "argent.security",
+      "type": "com.argent.servicecommon.security.SecurityProperties",
+      "description": "Настройки цепочки фильтров безопасности."
+    }
+  ],
+  "properties": [
+    {
+      "name": "argent.auth.password-required",
+      "type": "java.lang.Boolean",
+      "description": "Требуется ли пароль при входе. false допускает вход только по логину (в журнал пишется предупреждение).",
+      "defaultValue": true
+    },
+    {
+      "name": "argent.auth.registration.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Разрешена ли самостоятельная регистрация через POST /api/auth/register.",
+      "defaultValue": false
+    },
+    {
+      "name": "argent.auth.registration.default-roles",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Коды ролей, назначаемых новому пользователю при самостоятельной регистрации. Роли должны существовать, иначе регистрация отвечает 409.",
+      "defaultValue": []
+    },
+    {
+      "name": "argent.auth.bootstrap-admin.login",
+      "type": "java.lang.String",
+      "description": "Логин администратора, создаваемого при запуске и получающего роль ADMIN.",
+      "defaultValue": "admin"
+    },
+    {
+      "name": "argent.auth.bootstrap-admin.password",
+      "type": "java.lang.String",
+      "description": "Пароль администратора, создаваемого при запуске. Обязателен, если вход требует пароля и администратора ещё нет; пароль существующего администратора не меняется.",
+      "defaultValue": ""
+    },
+    {
+      "name": "argent.auth.session-ttl",
+      "type": "java.time.Duration",
+      "description": "Срок действия сессии и выданного для неё токена.",
+      "defaultValue": "30d"
+    },
+    {
+      "name": "argent.auth.jwt.key-file",
+      "type": "java.nio.file.Path",
+      "description": "Путь к закрытому RSA-ключу подписи JWT в формате PEM PKCS#8. Если файла нет, ключ создаётся при запуске.",
+      "defaultValue": "./config/argent-jwt.pem"
+    },
+    {
+      "name": "argent.auth.roles-file",
+      "type": "java.lang.String",
+      "description": "Ресурс со стартовыми ролями приложения (префиксы classpath:, file:): JSON-массив ролей {code, name, description, grants}. Необязателен: если ресурса нет, роли не загружаются. Неизвестное поле или ошибка в файле прерывает запуск; роль ADMIN в файле игнорируется.",
+      "defaultValue": "classpath:argent-roles.json"
+    },
+    {
+      "name": "argent.auth.roles-file-mode",
+      "type": "com.argent.servicecommon.auth.AuthProperties$RolesFileMode",
+      "description": "Режим загрузки ролей из argent.auth.roles-file: create — создавать только отсутствующие по коду роли, overwrite — также приводить имя, описание и гранты существующих ролей к файлу.",
+      "defaultValue": "create"
+    },
+    {
+      "name": "argent.security.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Включает безопасность библиотеки: JWT, цепочку фильтров с правилом доступа к справочникам по грантам, вход, стартовые роли и администрирование пользователей и ролей. false отключает всё это, включая проверку доступа к справочникам.",
+      "defaultValue": true
+    },
+    {
+      "name": "argent.security.permit-paths",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Дополнительные шаблоны путей, доступные без входа (к открытым по умолчанию путям входа, Swagger и /actuator/health).",
+      "defaultValue": []
+    },
+    {
+      "name": "argent.security.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Разрешённые источники CORS для /api/**. Пустой список отключает настройку CORS.",
+      "defaultValue": []
+    },
+    {
+      "name": "argent.security.actions",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Коды действий приложения для каталога подсказок GET /api/grants/catalog в редакторе ролей (действие admin добавляется всегда). На проверку прав не влияет.",
+      "defaultValue": []
+    }
+  ],
+  "hints": [
+    {
+      "name": "argent.auth.roles-file-mode",
+      "values": [
+        {
+          "value": "create",
+          "description": "Создавать только роли, которых ещё нет по коду; существующие не трогать."
+        },
+        {
+          "value": "overwrite",
+          "description": "Приводить имя, описание и гранты существующих ролей к содержимому файла."
+        }
+      ]
+    }
+  ]
+}

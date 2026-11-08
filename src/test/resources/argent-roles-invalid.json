@@ -1,0 +1,7 @@
+[
+  {
+    "code": "BROKEN",
+    "name": "Сломанная роль",
+    "grants": {"tables": {"*": ["delete"]}}
+  }
+]

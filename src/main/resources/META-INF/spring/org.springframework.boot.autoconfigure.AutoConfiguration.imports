@@ -3,3 +3,8 @@ com.argent.servicecommon.dictionary.config.DictionaryRegistrationAutoConfigurati
 com.argent.servicecommon.dictionary.config.DictionaryDtoAutoConfiguration
 com.argent.servicecommon.dictionary.config.DictionaryWebAutoConfiguration
 com.argent.servicecommon.dictionary.dynamic.config.DynamicDictionaryAutoConfiguration
+com.argent.servicecommon.config.CommonFlywayAutoConfiguration
+com.argent.servicecommon.error.config.ErrorAutoConfiguration
+com.argent.servicecommon.security.config.SecurityAutoConfiguration
+com.argent.servicecommon.security.config.SecurityWebAutoConfiguration
+com.argent.servicecommon.auth.config.AuthAutoConfiguration

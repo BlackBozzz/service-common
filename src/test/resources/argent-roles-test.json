@@ -1,0 +1,14 @@
+[
+  {
+    "code": "READER",
+    "name": "Читатель",
+    "description": "Читает все таблицы",
+    "grants": {"tables": {"*": ["read"]}}
+  },
+  {
+    "code": "EDITOR",
+    "name": "Редактор",
+    "system": true,
+    "grants": {"tables": {"*": ["read", "write"]}, "actions": ["documents.approve"]}
+  }
+]

@@ -100,12 +100,13 @@ class DictionarySchemaIntegrationTest {
         );
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.flyway.locations", () -> "classpath:db/migration/common");
+        registry.add("spring.flyway.locations", () -> "classpath:db/migration/app");
         registry.add("spring.flyway.schemas", () -> "it_schema");
         registry.add("spring.flyway.default-schema", () -> "it_schema");
         registry.add("spring.jpa.properties.hibernate.default_schema", () -> "it_schema");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.jpa.open-in-view", () -> "false");
+        registry.add("argent.security.enabled", () -> "false");
         registry.add("spring.jpa.properties.hibernate.type.prefer_native_enum_types", () -> "false");
     }
 

@@ -20,7 +20,11 @@ import javax.sql.DataSource;
         beforeName = "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
 )
 @AutoConfigurationPackage(
-        basePackages = "com.argent.servicecommon.dictionary"
+        basePackages = {
+                "com.argent.servicecommon.dictionary",
+                "com.argent.servicecommon.auth",
+                "com.argent.servicecommon.security"
+        }
 )
 public class ServiceCommonAutoConfiguration {
     /**
