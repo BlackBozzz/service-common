@@ -17,10 +17,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Доступ к текущему пользователю запроса через {@link SecurityContextHolder}.
- *
- * <p>Имя аутентификации — идентификатор пользователя, authorities — права из грантов ролей:
- * {@code table:<t>:read|write} и {@code action:<a>}.</p>
+ * Текущий пользователь запроса из {@link SecurityContextHolder}: имя аутентификации — id пользователя,
+ * authorities — {@code table:<t>:read|write} и {@code action:<a>} из грантов ролей.
  */
 public final class CurrentUser {
 

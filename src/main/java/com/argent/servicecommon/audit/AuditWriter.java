@@ -8,14 +8,12 @@ import java.time.ZoneOffset;
 import java.util.Objects;
 
 /**
- * Запись строки журнала аудита прямым SQL через {@link JdbcTemplate}.
+ * Запись строки журнала аудита прямым SQL через {@link JdbcTemplate}; автор — {@link CurrentUser}, вне запроса пусто.
  *
- * <p>JDBC-соединение берётся из текущей Spring-транзакции, поэтому запись аудита фиксируется и
- * откатывается вместе с изменением данных. Hibernate-сессия не используется: слушатели вызываются
- * посреди flush, и сохранение сущности через ту же сессию нарушило бы очередь её действий.</p>
- *
- * <p>Автор изменения — текущий пользователь ({@link CurrentUser#id()}, {@link CurrentUser#login()});
- * для анонимного или системного вызова оба поля пустые.</p>
+ * <p>Соединение берётся из текущей Spring-транзакции, поэтому строка фиксируется и откатывается вместе с данными.
+ * Вне Spring-транзакции {@link JdbcTemplate} берёт отдельное соединение в autocommit: строка фиксируется сразу и не
+ * откатывается. Hibernate-сессия не используется: слушатели вызываются посреди flush, и сохранение сущности через
+ * ту же сессию нарушило бы очередь её действий.</p>
  */
 public class AuditWriter {
 
@@ -30,12 +28,7 @@ public class AuditWriter {
     }
 
     /**
-     * Добавляет строку журнала.
-     *
-     * @param entityType имя таблицы сущности
-     * @param entityId   идентификатор записи; {@code null} для операции над всей таблицей
-     * @param action     INSERT, UPDATE, DELETE или REPLACE
-     * @param field      изменённое свойство; {@code null} для записи целиком
+     * Добавляет строку; {@code entityId}/{@code field} — {@code null} для операции над таблицей или записью целиком.
      */
     public void write(String entityType, String entityId, String action, String field,
                       String oldValue, String newValue) {

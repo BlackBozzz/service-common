@@ -26,19 +26,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Строит {@link TableData} из зарегистрированного справочника через публичные сервисы модуля
- * справочников.
- *
- * <ul>
- *     <li>Колонки — видимые поля схемы по {@code order} из {@code @DictionaryField}, при равном
- *     {@code order} — в порядке объявления в DTO; заголовок — {@code label} из
- *     {@code @DictionaryField}. Пропускаются коллекции, множественные ссылки, вложенные объекты и
- *     двоичные поля ({@code byte[]}).</li>
- *     <li>Ссылка выводится полем отображения связанного справочника (вложенный DTO уже есть в записи),
- *     без поля отображения — идентификатором; перечисление — {@code name()}.</li>
- *     <li>Записи читаются страницами {@link DynamicDictionaryQueryService#page} с теми же поиском и
- *     сортировкой, что и в универсальной таблице. Больше {@code maxRows} записей — 400.</li>
- * </ul>
+ * Строит {@link TableData} из справочника: видимые поля по {@code order}, ссылки — поле отображения, коллекции и
+ * {@code byte[]} пропускаются; записи читаются страницами с поиском и сортировкой универсальной таблицы.
  */
 public class DictionaryExportService {
 
@@ -59,12 +48,9 @@ public class DictionaryExportService {
     }
 
     /**
-     * Читает все записи справочника и строит таблицу экспорта.
+     * Весь справочник в таблицу; {@code search}/{@code sort} ({@code поле,asc|desc}) как в универсальной таблице.
      *
-     * @param code   код справочника
-     * @param search строка поиска универсальной таблицы; {@code null} — без поиска
-     * @param sort   сортировка {@code поле,asc|desc}; {@code null} — по умолчанию
-     * @return таблица с названием справочника в заголовке
+     * @throws IllegalArgumentException записей больше {@code maxRows} (400)
      */
     @Transactional(readOnly = true)
     public TableData build(String code, String search, String sort) {

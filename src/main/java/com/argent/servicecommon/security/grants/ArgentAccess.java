@@ -2,17 +2,7 @@ package com.argent.servicecommon.security.grants;
 
 import com.argent.servicecommon.security.CurrentUser;
 
-/**
- * Проверки прав текущего пользователя для SpEL, бин {@code argentAccess}:
- *
- * <pre>{@code
- * @PreAuthorize("@argentAccess.action('documents.approve')")
- * @PreAuthorize("@argentAccess.table('documents', 'write')")
- * }</pre>
- *
- * <p>Права берутся из authorities аутентификации в {@code SecurityContextHolder}; для анонимного
- * запроса обе проверки ложны.</p>
- */
+/** Проверки прав для SpEL, бин {@code argentAccess}: {@code action(code)} и {@code table(table, op)}. */
 public class ArgentAccess {
 
     /**

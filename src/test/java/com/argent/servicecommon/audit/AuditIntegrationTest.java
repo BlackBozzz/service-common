@@ -217,6 +217,25 @@ class AuditIntegrationTest {
     }
 
     @Test
+    void rollbackDropsAuditRows() {
+        tx.executeWithoutResult(status -> {
+            AudOrder order = new AudOrder();
+            order.setNumber("R-1");
+            order.setSecret("начальный");
+            order.setStatus(AudOrder.Status.NEW);
+            entityManager.persist(order);
+            entityManager.flush();
+            assertThat(jdbc.queryForObject(
+                    "select count(*) from common_audit_entry where entity_type = 'aud_order'", Long.class))
+                    .isEqualTo(1L);
+            status.setRollbackOnly();
+        });
+
+        assertThat(jdbc.queryForObject("select count(*) from aud_order", Long.class)).isZero();
+        assertThat(entries()).isEmpty();
+    }
+
+    @Test
     void shouldRecordReferenceAsId() {
         Long north = createRegion("Северный");
         Long south = createRegion("Южный");
@@ -273,8 +292,74 @@ class AuditIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void shouldListAllTablesForAdminWithoutEntityType() throws Exception {
+        createOrder("ALL-1", AudOrder.Status.NEW, null);
+        tx.executeWithoutResult(status -> {
+            AudNoTable entity = new AudNoTable();
+            entity.setName("другая таблица");
+            entityManager.persist(entity);
+        });
+        String admin = tokenWith("{\"actions\":[\"admin\"]}");
+
         mvc.perform(get("/api/audit").header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.entityType == 'aud_order')]").isNotEmpty())
+                .andExpect(jsonPath("$.items[?(@.entityType == 'aud_no_table')]").isNotEmpty());
+    }
+
+    @Test
+    void shouldRejectMissingEntityTypeForNonAdmin() throws Exception {
+        String reader = tokenWith("{\"tables\":{\"aud_order\":[\"read\"]}}");
+
+        mvc.perform(get("/api/audit").header(HttpHeaders.AUTHORIZATION, "Bearer " + reader))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Укажите entityType"));
+    }
+
+    @Test
+    void shouldRejectInvalidEntityType() throws Exception {
+        String admin = tokenWith("{\"actions\":[\"admin\"]}");
+
+        mvc.perform(get("/api/audit").param("entityType", "Bad Name")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Недопустимое имя таблицы: Bad Name"));
+        mvc.perform(get("/api/audit").param("entityType", "")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldAllowWildcardRead() throws Exception {
+        createOrder("W-1", AudOrder.Status.NEW, null);
+        String wildcard = tokenWith("{\"tables\":{\"*\":[\"read\"]}}");
+
+        mvc.perform(get("/api/audit").param("entityType", "aud_order")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + wildcard))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldDenyWriteOnlyGrant() throws Exception {
+        String writer = tokenWith("{\"tables\":{\"aud_order\":[\"write\"]}}");
+
+        mvc.perform(get("/api/audit").param("entityType", "aud_order")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + writer))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldReturnEmptyWhenFromAfterTo() throws Exception {
+        createOrder("E-1", AudOrder.Status.NEW, null);
+        String admin = tokenWith("{\"actions\":[\"admin\"]}");
+
+        mvc.perform(get("/api/audit").param("from", "2030-01-01T00:00:00Z").param("to", "2020-01-01T00:00:00Z")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     @Test

@@ -34,7 +34,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -115,6 +118,27 @@ class DictionaryUrlAccessIntegrationTest {
 
         expect(createRequest(), reader, status().isForbidden());
         expect(createRequest(), writer, status().isCreated());
+    }
+
+    @Test
+    void shouldDenyPutAndDeleteWithReadOnly() throws Exception {
+        String reader = tokenWith(READER);
+        long id = createCountry(tokenWith(WRITER));
+        String item = RECORDS + "/" + id;
+
+        expect(put(item).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Италия\"}"),
+                reader, status().isForbidden());
+        expect(delete(item), reader, status().isForbidden());
+        expect(get(item), reader, status().isOk());
+    }
+
+    @Test
+    void shouldTreatHeadAsRead() throws Exception {
+        String reader = tokenWith(READER);
+        String nobody = tokenWith(NOBODY);
+
+        expect(head(RECORDS), reader, status().isOk());
+        expect(head(RECORDS), nobody, status().isForbidden());
     }
 
     @Test

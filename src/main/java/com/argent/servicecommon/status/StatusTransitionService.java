@@ -21,15 +21,10 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * Статусная машина: проверяет переходы между статусами по справочнику переходов.
+ * Проверка переходов статусов по справочнику переходов; поле статуса в сущности приложение меняет само.
  *
- * <p>Сервис только проверяет переход; поле статуса в своей сущности приложение меняет само.
- * Переход с {@code fromCode == null} — присвоение статуса при создании записи. Если у перехода
- * задано {@code requiredAction}, текущий пользователь должен иметь это действие
- * ({@link CurrentUser#hasAction}); анонимный пользователь такой переход не проходит.</p>
- *
- * <p>Отказы (404/409/403) не помечают транзакцию вызывающего на откат: исключение можно поймать
- * и продолжить работу в той же транзакции.</p>
+ * <p>{@code noRollbackFor}: отказы (404/409/403) не помечают транзакцию вызывающего на откат — исключение можно
+ * поймать и продолжить работу в той же транзакции.</p>
  */
 @Transactional(readOnly = true,
         noRollbackFor = {EntityNotFoundException.class, IllegalStateException.class, AccessDeniedException.class})
@@ -47,14 +42,12 @@ public class StatusTransitionService {
     }
 
     /**
-     * Проверяет, что переход {@code fromCode → toCode} предусмотрен и доступен текущему пользователю.
+     * Проверяет, что переход предусмотрен и доступен текущему пользователю ({@link CurrentUser#hasAction} для
+     * {@code requiredAction}; аноним не проходит); {@code fromCode == null} — создание записи.
      *
-     * @param typeCode код типа статуса
-     * @param fromCode код исходного статуса; {@code null} — создание записи
-     * @param toCode   код целевого статуса
-     * @throws EntityNotFoundException тип или статус не найден (404)
-     * @throws IllegalStateException   переход не предусмотрен (409)
-     * @throws GrantsAccessDeniedException у пользователя нет действия, которого требует переход (403)
+     * @throws EntityNotFoundException    тип или статус не найден (404)
+     * @throws IllegalStateException      переход не предусмотрен (409)
+     * @throws GrantsAccessDeniedException нет действия, которого требует переход (403)
      */
     public void assertAllowed(String typeCode, String fromCode, String toCode) {
         CommonStatusType type = type(typeCode);
@@ -73,9 +66,8 @@ public class StatusTransitionService {
     }
 
     /**
-     * Целевые статусы переходов из {@code fromCode}, доступные текущему пользователю, по {@code sortOrder}.
+     * Статусы, доступные текущему пользователю из {@code fromCode} ({@code null} — при создании), по {@code sortOrder}.
      *
-     * @param fromCode код исходного статуса; {@code null} — статусы, доступные при создании записи
      * @throws EntityNotFoundException тип или статус не найден
      */
     public List<CommonStatusDto> allowedFrom(String typeCode, String fromCode) {

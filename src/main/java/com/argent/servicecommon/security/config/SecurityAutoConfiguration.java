@@ -62,13 +62,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Автоконфигурация аутентификации по JWT с сессиями в базе данных.
- *
- * <p>Регистрирует ключ подписи, кодировщик и декодер JWT, преобразование токена
- * в аутентификацию с authorities из грантов ролей, бин {@code argentAccess} для SpEL,
- * {@link TokenService}, сервисы администрирования пользователей и ролей и — в сервлетном
- * приложении — цепочку фильтров с ответами 401/403 в формате ProblemDetail.
- * Отключается свойством {@code argent.security.enabled=false}.</p>
+ * Аутентификация по JWT с сессиями в БД: ключ, кодировщик и декодер JWT, authorities из грантов, бин
+ * {@code argentAccess}, администрирование и цепочка фильтров с ответами ProblemDetail. Выключается
+ * {@code argent.security.enabled=false}.
  */
 @AutoConfiguration(beforeName = {
         "org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration",

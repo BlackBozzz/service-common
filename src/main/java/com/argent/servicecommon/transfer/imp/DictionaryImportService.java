@@ -39,31 +39,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Импорт листа таблицы в зарегистрированный справочник через публичные сервисы модуля справочников.
+ * Импорт листа в справочник через публичные сервисы модуля справочников (режимы REPLACE и UPSERT).
  *
- * <h2>Режимы</h2>
- * <ul>
- *     <li>{@link ImportMode#REPLACE}: только для справочников без коллекций ({@code @ElementCollection},
- *     {@code @OneToMany}, {@code @ManyToMany}). Лист без строк данных отменяется («Лист не содержит
- *     данных») без удаления. Сначала проверяются все строки листа; если есть ошибка
- *     листа, при {@code fail-all} — любая ошибка, при {@code skip-row} — нет ни одной корректной строки,
- *     то удаление не выполняется и лист отменяется. Иначе все строки таблицы удаляются одним
- *     {@code DELETE}, затем корректные строки создаются через {@link DictionaryDtoCrudService#create}.
- *     Нарушение внешнего ключа при удалении — {@link IllegalStateException} (REST 409).</li>
- *     <li>{@link ImportMode#UPSERT}: запись ищется по ключевым полям ({@link ColumnMapping#keyFields()}
- *     или {@link EntityKeyFields}). Простые ключевые поля — фильтры равенства
- *     {@link DynamicDictionaryQueryService#page}; ссылочные ключевые поля сравниваются по
- *     идентификатору в памяти среди найденных страниц (если простых ключей нет — просматриваются все
- *     записи справочника). Найденная запись читается как DTO, непустые ячейки листа накладываются
- *     поверх, затем {@code update}; пустая ячейка и отсутствующая колонка оставляют значение.</li>
- * </ul>
- *
- * <h2>Ошибки</h2>
- * <p>Ошибки преобразования, ссылок, ключей и Bean Validation находятся до записи в базу и собираются
- * по строкам. {@code fail-all}: после первой ошибки строки только проверяются, в конце бросается
- * {@link ImportFailedException} со всеми ошибками, транзакция откатывается. {@code skip-row}: ошибочные
- * строки пропускаются. Ошибка самой базы данных (уникальность, NOT NULL и т. п.) делает транзакцию
- * непригодной, поэтому при любой стратегии лист отменяется с {@link ImportFailedException}.</p>
+ * <p>Ошибки значений, ссылок, ключей и Bean Validation находятся до записи в базу. Ошибка самой базы данных
+ * (уникальность, NOT NULL) делает транзакцию непригодной, поэтому при любой стратегии лист отменяется с
+ * {@link ImportFailedException}. REPLACE удаляет записи, только когда все строки проверены.</p>
  */
 public class DictionaryImportService {
 
@@ -109,13 +89,9 @@ public class DictionaryImportService {
     }
 
     /**
-     * Импортирует лист со стратегией ошибок из {@code argent.transfer.import-on-error}.
+     * Лист со стратегией из {@code argent.transfer.import-on-error}; {@code mapping == null} — автосопоставление.
      *
-     * @param code    код справочника
-     * @param sheet   прочитанный лист
-     * @param mode    режим импорта
-     * @param mapping сопоставление колонок; {@code null} — автоматическое без явных ключей
-     * @return отчёт; при отмене листа — {@link ImportFailedException} с отчётом
+     * @throws ImportFailedException лист отменён; отчёт — в {@link ImportFailedException#report()}
      */
     @Transactional
     public ImportReport importSheet(String code, SheetData sheet, ImportMode mode, ColumnMapping mapping) {
@@ -153,6 +129,11 @@ public class DictionaryImportService {
         if (mode == ImportMode.REPLACE) {
             replace(code, dictionary.entityClass(), plan, rows, progress, onError, referenceCache);
         } else {
+            if (rows.isEmpty()) {
+                // Как и для REPLACE: пустой лист — скорее всего ошибка выбора файла, а не намеренный пустой импорт.
+                progress.sheetError(EMPTY_SHEET);
+                throw new ImportFailedException(progress.cancelled());
+            }
             for (RowData row : rows) {
                 Prepared prepared = prepare(code, plan, mode, row, progress, referenceCache);
                 if (prepared != null && progress.canWrite(onError)) {

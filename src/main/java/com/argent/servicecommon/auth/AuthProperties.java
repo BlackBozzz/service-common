@@ -7,18 +7,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
-/**
- * Настройки аутентификации ({@code argent.auth.*}).
- *
- * @param passwordRequired требуется ли пароль при входе; {@code false} допускает вход только по логину
- * @param registration     настройки самостоятельной регистрации пользователей
- * @param bootstrapAdmin   учётная запись администратора, создаваемая при первом запуске
- * @param sessionTtl       срок действия сессии и выданного для неё токена
- * @param jwt              настройки подписи JWT
- * @param rolesFile        ресурс со стартовыми ролями приложения (JSON-массив ролей с грантами);
- *                         файл необязателен, если его нет — роли не загружаются
- * @param rolesFileMode    режим загрузки ролей из {@code rolesFile}
- */
+/** Настройки аутентификации {@code argent.auth.*}; описание и умолчания — {@code docs/reference.md}. */
 @ConfigurationProperties("argent.auth")
 public record AuthProperties(
         @DefaultValue("true") boolean passwordRequired,
@@ -38,12 +27,7 @@ public record AuthProperties(
         OVERWRITE
     }
 
-    /**
-     * Настройки самостоятельной регистрации.
-     *
-     * @param enabled      разрешена ли регистрация через {@code /api/auth/register}
-     * @param defaultRoles коды ролей, назначаемых новому пользователю
-     */
+    /** Самостоятельная регистрация. */
     public record Registration(
             @DefaultValue("false") boolean enabled,
             @DefaultValue List<String> defaultRoles
@@ -53,12 +37,7 @@ public record AuthProperties(
         }
     }
 
-    /**
-     * Администратор, создаваемый при первом запуске.
-     *
-     * @param login    логин администратора
-     * @param password пароль администратора; пустое значение означает, что пароль не задан
-     */
+    /** Администратор, создаваемый при первом запуске; пустой пароль — пароль не задан. */
     public record BootstrapAdmin(
             @DefaultValue("admin") String login,
             @DefaultValue("") String password
@@ -68,11 +47,7 @@ public record AuthProperties(
         }
     }
 
-    /**
-     * Настройки подписи JWT.
-     *
-     * @param keyFile путь к закрытому RSA-ключу в формате PEM PKCS#8; если файла нет, ключ создаётся
-     */
+    /** Ключ подписи JWT: PEM PKCS#8, создаётся, если файла нет. */
     public record Jwt(@DefaultValue("./config/argent-jwt.pem") Path keyFile) {
     }
 }

@@ -4,12 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Пользователь в интерфейсе администрирования.
- *
- * @param hasPassword задан ли пароль
- * @param roles       коды ролей по алфавиту
- */
+/** Пользователь в администрировании; {@code roles} — коды по алфавиту. */
 public record UserDto(
         UUID id,
         String login,

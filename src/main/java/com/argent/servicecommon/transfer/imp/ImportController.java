@@ -32,20 +32,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * REST импорта листов XLSX/CSV в справочники.
- *
- * <ul>
- *     <li>{@code POST /api/import/dictionaries/{code}} — multipart {@code file} (XLSX или CSV по
- *     расширению), {@code mode} = {@code REPLACE|UPSERT}, необязательные {@code sheet} (имя листа XLSX,
- *     по умолчанию первый), {@code keyFields} (поля через запятую), {@code mapping} (JSON
- *     {@code {"Заголовок": "поле"}}; {@code null} — колонка игнорируется). Ответ — {@link ImportReport};
- *     отменённый импорт — 400 ProblemDetail «Ошибка импорта» с отчётом в свойстве {@code report}.
- *     Требует действие {@code import} и право {@code write} на справочник.</li>
- *     <li>{@code POST /api/import/dictionaries} — все листы XLSX; лист сопоставляется со справочником
- *     по коду или названию без учёта регистра; отдельная транзакция и отчёт на каждый лист, ключи UPSERT —
- *     по умолчанию сущности. Требует действие {@code import}; лист без права {@code write} не
- *     импортируется. Ответ — список {@link SheetImportResult}.</li>
- * </ul>
+ * REST импорта: {@code POST /api/import/dictionaries/{code}} (действие {@code import} и {@code write} на справочник)
+ * и {@code POST /api/import/dictionaries} — все листы XLSX, транзакция и отчёт на лист.
  */
 @RestController
 @RequestMapping("/api/import/dictionaries")

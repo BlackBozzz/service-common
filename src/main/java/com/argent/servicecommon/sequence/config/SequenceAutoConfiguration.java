@@ -12,11 +12,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.Clock;
 
 /**
- * Автоконфигурация нумерации документов: {@link NumberGenerator} и системные часы {@link Clock}.
- *
- * <p>Включается, только если в контексте есть {@link CommonSequenceRepository} (приложение,
- * задающее свой {@code @EnableJpaRepositories} без пакета {@code sequence}, нумерацию не
- * получает). Свой бин {@link Clock} (например, фиксированные часы в тестах) заменяет системный.</p>
+ * Нумерация: {@link NumberGenerator} и системные часы {@link Clock}; включается, только если есть
+ * {@link CommonSequenceRepository}. Свой бин {@link Clock} (например, фиксированный в тестах) заменяет системный.
  */
 @AutoConfiguration(
         after = ServiceCommonAutoConfiguration.class,

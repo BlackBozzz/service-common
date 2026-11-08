@@ -9,13 +9,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
- * Ответ на отменённый импорт: 400 ProblemDetail с заголовком «Ошибка импорта» и полным отчётом
- * ({@link ImportReport}) в свойстве {@code report}.
- *
- * <p>Превышение лимита multipart Spring ({@code spring.servlet.multipart.max-file-size}) отвечает тем же
- * 400 «Файл превышает допустимый размер», что и лимит {@code argent.transfer.max-upload-bytes}.</p>
- *
- * <p>Порядок выше общего обработчика, чтобы его обработчик {@code Exception} не перехватил ошибку.</p>
+ * Отменённый импорт — 400 «Ошибка импорта» с отчётом в {@code report}; лимит multipart Spring — 400 «Файл превышает
+ * допустимый размер». Порядок выше общего обработчика, чтобы его обработчик {@code Exception} не перехватил ошибку.
  */
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)

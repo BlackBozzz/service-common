@@ -3,10 +3,8 @@ package com.argent.servicecommon.security.dto;
 import java.util.List;
 
 /**
- * Каталог подсказок для редактора грантов.
- *
- * @param tables  коды зарегистрированных справочников по алфавиту
- * @param actions действия приложения из {@code argent.security.actions} и встроенное {@code admin} по алфавиту
+ * Подсказки редактора грантов по алфавиту: коды справочников и действия ({@code argent.security.actions}, {@code
+ * admin}).
  */
 public record GrantsCatalogDto(List<String> tables, List<String> actions) {
 }

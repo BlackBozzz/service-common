@@ -2,11 +2,7 @@ package com.argent.servicecommon.auth.exception;
 
 import org.springframework.security.access.AccessDeniedException;
 
-/**
- * Самостоятельная регистрация выключена ({@code argent.auth.registration.enabled=false}).
- *
- * <p>Обработчик ошибок возвращает 403 и передаёт сообщение клиенту.</p>
- */
+/** Регистрация выключена ({@code argent.auth.registration.enabled=false}); ответ 403 с этим сообщением. */
 public class RegistrationDisabledException extends AccessDeniedException {
 
     public RegistrationDisabledException() {

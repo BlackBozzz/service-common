@@ -16,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
+/** Ядро библиотеки: пакеты её JPA-сущностей и репозиториев, сканер и генератор таблиц справочников. */
 @AutoConfiguration(
         beforeName = "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
 )
@@ -27,16 +28,12 @@ import javax.sql.DataSource;
                 "com.argent.servicecommon.status",
                 "com.argent.servicecommon.sequence",
                 "com.argent.servicecommon.audit",
-                "com.argent.servicecommon.transfer"
+                "com.argent.servicecommon.transfer",
+                "com.argent.servicecommon.attachment"
         }
 )
 public class ServiceCommonAutoConfiguration {
-    /**
-     * Регистрирует сервис обнаружения справочников.
-     *
-     * Позволяет основному приложению использовать стандартную
-     * реализацию либо предоставить собственную.
-     */
+    /** Сканер справочников; приложение может объявить свой бин. */
     @Bean
     @ConditionalOnMissingBean(DictionaryScannerService.class)
     public DictionaryScannerService dictionaryScannerService(
@@ -45,12 +42,7 @@ public class ServiceCommonAutoConfiguration {
         return new DictionaryScannerService(entityManagerFactory);
     }
 
-    /**
-     * Регистрирует генератор таблиц справочников для PostgreSQL.
-     *
-     * Позволяет заменить стандартную реализацию генератора
-     * собственной реализацией в основном приложении.
-     */
+    /** Генератор таблиц справочников для PostgreSQL; приложение может объявить свой бин. */
     @Bean
     @ConditionalOnMissingBean(DictionarySchemaGenerator.class)
     public DictionarySchemaGenerator dictionarySchemaGenerator(

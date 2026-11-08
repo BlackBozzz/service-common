@@ -4,12 +4,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.IsoFields;
 
-/**
- * Период сброса счётчика номеров.
- *
- * <p>{@link #periodKey(LocalDate)} возвращает ключ периода: строку, которая меняется ровно тогда,
- * когда счётчик должен начаться заново с 1.</p>
- */
+/** Период сброса счётчика: ключ периода меняется ровно тогда, когда счётчик начинается заново с 1. */
 public enum ResetPeriod {
     /** Счётчик не сбрасывается. */
     NEVER,
@@ -25,14 +20,8 @@ public enum ResetPeriod {
     private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
 
     /**
-     * Ключ периода для даты.
-     *
-     * <p>DAILY — {@code yyyyMMdd}, MONTHLY — {@code yyyy-MM}, YEARLY — {@code yyyy}, WEEKLY —
-     * ISO-неделя {@code <год недели>-W<номер недели из двух цифр>} (2025-12-29 → {@code 2026-W01}),
-     * NEVER — постоянный ключ {@code 1}.</p>
-     *
-     * @param date текущая дата
-     * @return ключ периода
+     * Ключ периода: DAILY — {@code yyyyMMdd}, MONTHLY — {@code yyyy-MM}, YEARLY — {@code yyyy}, WEEKLY — ISO-неделя
+     * {@code <год недели>-W<две цифры>} (2025-12-29 → {@code 2026-W01}), NEVER — постоянный {@code 1}.
      */
     public String periodKey(LocalDate date) {
         return switch (this) {

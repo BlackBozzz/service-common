@@ -54,6 +54,7 @@ class CommonFlywayIntegrationTest {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         // Ключ JWT создаётся при запуске; не оставляем его в рабочем каталоге модуля.
         registry.add("argent.auth.jwt.key-file", () -> keyDirectory.resolve("argent-jwt.pem").toString());
+        registry.add("argent.attachments.root", () -> keyDirectory.resolve("attachments").toString());
         registry.add("argent.auth.bootstrap-admin.password", () -> "test-admin-pass");
     }
 
@@ -76,13 +77,13 @@ class CommonFlywayIntegrationTest {
                 "common_dictionaries", "common_user", "common_user_session", "common_role",
                 "common_user_role", "common_schema_history", "flyway_schema_history",
                 "common_status_type", "common_status", "common_status_transition",
-                "common_sequence", "common_audit_entry");
+                "common_sequence", "common_audit_entry", "common_attachment");
         assertThat(tables).doesNotContain("common_permission", "common_role_permission");
 
         List<String> libraryVersions = jdbc.queryForList(
                 "SELECT version FROM " + SCHEMA + ".common_schema_history WHERE version IS NOT NULL",
                 String.class);
-        assertThat(libraryVersions).containsExactlyInAnyOrder("1", "2", "3", "4");
+        assertThat(libraryVersions).containsExactlyInAnyOrder("1", "2", "3", "4", "5");
 
         List<String> appVersions = jdbc.queryForList(
                 "SELECT version FROM " + SCHEMA + ".flyway_schema_history WHERE version IS NOT NULL",
@@ -98,7 +99,8 @@ class CommonFlywayIntegrationTest {
     @Test
     void shouldUseUuidPrimaryKeys() {
         for (String table : List.of("common_user", "common_role", "common_status_type", "common_status",
-                "common_status_transition", "common_sequence", "common_audit_entry")) {
+                "common_status_transition", "common_sequence", "common_audit_entry",
+                "common_attachment")) {
             String type = jdbc.queryForObject(
                     "SELECT data_type FROM information_schema.columns "
                             + "WHERE table_schema = ? AND table_name = ? AND column_name = 'id'",

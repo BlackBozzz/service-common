@@ -5,11 +5,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Locale;
 import java.util.Optional;
 
-/**
- * Операция над таблицей в грантах роли. В JSON записывается строчным значением.
- *
- * <p>{@link #WRITE} не подразумевает {@link #READ}: каждая операция выдаётся отдельно.</p>
- */
+/** Операция над таблицей в грантах (строчными в JSON); {@link #WRITE} не подразумевает {@link #READ}. */
 public enum GrantOp {
 
     /** Чтение записей и схемы. */

@@ -10,10 +10,8 @@ import org.hibernate.integrator.spi.Integrator;
 import java.util.Objects;
 
 /**
- * Подключает {@link AuditEventListener} к событиям Hibernate post-insert, post-update и post-delete.
- *
- * <p>Передаётся в Hibernate через свойство {@code hibernate.integrator_provider}, см.
- * {@link com.argent.servicecommon.audit.config.AuditAutoConfiguration}.</p>
+ * Подключает {@link AuditEventListener} к событиям post-insert/update/delete; передаётся в Hibernate через
+ * {@code hibernate.integrator_provider}, см. {@link com.argent.servicecommon.audit.config.AuditAutoConfiguration}.
  */
 public class AuditHibernateIntegrator implements Integrator {
 

@@ -17,11 +17,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Выдаёт JWT, привязанные к сессиям в базе данных, и отзывает эти сессии.
- *
- * <p>Токен содержит {@code sub} — идентификатор пользователя, {@code sessionId} — идентификатор
- * сессии и {@code login}. Срок действия токена совпадает со сроком сессии. Отзыв сессии
- * делает токен недействительным при следующем запросе.</p>
+ * Выдаёт RS256-токены, привязанные к сессиям в БД ({@code sub}, {@code sessionId}, {@code login}), и отзывает сессии;
+ * отзыв действует со следующего запроса.
  */
 public class TokenService {
 
@@ -41,12 +38,7 @@ public class TokenService {
         this.sessionTtl = Objects.requireNonNull(sessionTtl);
     }
 
-    /**
-     * Создаёт сессию пользователя и выдаёт подписанный RS256 токен для неё.
-     *
-     * @param user сохранённый пользователь
-     * @return компактная сериализация JWT
-     */
+    /** Создаёт сессию пользователя и выдаёт для неё токен. */
     @Transactional
     public String issue(User user) {
         Objects.requireNonNull(user.getId(), "Пользователь должен быть сохранён до выдачи токена");
@@ -68,11 +60,7 @@ public class TokenService {
         return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
-    /**
-     * Отзывает сессию; отсутствующая или уже отозванная сессия не считается ошибкой.
-     *
-     * @param sessionId идентификатор сессии
-     */
+    /** Отзывает сессию; отсутствующая или уже отозванная сессия не считается ошибкой. */
     @Transactional
     public void revoke(UUID sessionId) {
         sessionRepository.findById(sessionId)
@@ -83,11 +71,7 @@ public class TokenService {
                 });
     }
 
-    /**
-     * Отзывает все действующие сессии пользователя.
-     *
-     * @param userId идентификатор пользователя
-     */
+    /** Отзывает все действующие сессии пользователя. */
     @Transactional
     public void revokeAll(UUID userId) {
         List<UserSession> sessions = sessionRepository.findByUserIdAndRevokedFalse(userId);

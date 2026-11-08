@@ -9,13 +9,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.util.UUID;
 
-/**
- * Роль пользователя.
- *
- * <p>Права роли хранятся JSON-документом {@link #grants} вида
- * {@code {"tables": {"<таблица>": ["read", "write"]}, "actions": ["<действие>"]}};
- * разбор и проверка документа выполняются в сервисах.</p>
- */
+/** Роль с правами в JSON {@link #grants} ({@code tables}, {@code actions}); разбор и проверка — в сервисах. */
 @Entity
 @Table(name = "common_role")
 @Getter

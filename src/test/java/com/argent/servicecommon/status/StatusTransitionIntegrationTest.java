@@ -11,6 +11,7 @@ import com.argent.servicecommon.security.entity.UserRole;
 import com.argent.servicecommon.security.entity.UserRoleId;
 import com.argent.servicecommon.security.repository.RoleRepository;
 import com.argent.servicecommon.security.repository.UserRoleRepository;
+import com.argent.servicecommon.status.dto.CommonStatusDto;
 import com.argent.servicecommon.status.entity.CommonStatus;
 import com.argent.servicecommon.status.entity.CommonStatusTransition;
 import com.argent.servicecommon.status.entity.CommonStatusType;
@@ -251,6 +252,49 @@ class StatusTransitionIntegrationTest {
     }
 
     @Test
+    void crossTypeTransitionIsIgnored() throws Exception {
+        CommonStatusType orderType = typeRepository.findByCode("ORDER").orElseThrow();
+        CommonStatusType other = new CommonStatusType();
+        other.setCode("INVOICE");
+        other.setName("Счёт");
+        other = typeRepository.save(other);
+        saveStatus(orderType, "ARCHIVED", "В архиве", 4, false, true);
+        CommonStatus foreign = saveStatus(other, "ARCHIVED", "В архиве", 1, false, true);
+        CommonStatus fromNew = statusRepository.findByStatusTypeIdAndCode(orderType.getId(), "NEW").orElseThrow();
+        transition(orderType, fromNew, foreign, null);
+
+        actAs("table:*:read");
+        assertThatThrownBy(() -> service.assertAllowed("ORDER", "NEW", "ARCHIVED"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Переход NEW→ARCHIVED не предусмотрен");
+        assertThat(service.allowedFrom("ORDER", "NEW")).extracting(CommonStatusDto::code).containsExactly("REVIEW");
+
+        mvc.perform(get("/api/status/ORDER/transitions").param("from", "NEW")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenWith(CLERK)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].code", contains("REVIEW")));
+    }
+
+    @Test
+    void adminPassesRequiredAction() throws Exception {
+        actAs("action:admin");
+        assertThatCode(() -> service.assertAllowed("ORDER", "REVIEW", "DONE")).doesNotThrowAnyException();
+
+        String admin = tokenWith("{\"actions\":[\"admin\"]}");
+        mvc.perform(post("/test/status/check").param("type", "ORDER").param("from", "REVIEW").param("to", "DONE")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/status/ORDER/transitions").param("from", "REVIEW")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].code", contains("DONE")));
+        mvc.perform(get("/api/status/ORDER/transitions").param("from", "")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].code", contains("NEW")));
+    }
+
+    @Test
     void adminEditOfTransitionShouldBeAudited() throws Exception {
         CommonStatusTransition transition = transitionRepository.findAll().stream()
                 .filter(candidate -> "orders.approve".equals(candidate.getRequiredAction()))
@@ -281,6 +325,35 @@ class StatusTransitionIntegrationTest {
                     .containsEntry("new_value", "orders.sign")
                     .containsEntry("actor_login", "admin");
         });
+    }
+
+    @Test
+    void actorFilledOverHttp() throws Exception {
+        String id = transitionRepository.findAll().stream()
+                .filter(candidate -> "orders.approve".equals(candidate.getRequiredAction()))
+                .findFirst().orElseThrow().getId().toString();
+        String body = mvc.perform(get("/api/argent-dictionary/common_status_transition/records/" + id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        ObjectNode record = (ObjectNode) JsonMapper.shared().readTree(body);
+        record.put("requiredAction", "orders.sign");
+        jdbc.update("DELETE FROM common_audit_entry");
+
+        String editor = tokenWith("{\"tables\":{\"common_status_transition\":[\"read\",\"write\"]}}");
+        String login = userRepository.findById(createdUsers.getLast()).orElseThrow().getLogin();
+        mvc.perform(put("/api/argent-dictionary/common_status_transition/records/" + id)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + editor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(record.toString()))
+                .andExpect(status().isOk());
+
+        assertThat(jdbc.queryForList("SELECT action, actor_login, field, old_value, new_value FROM common_audit_entry WHERE entity_id = ?", id))
+                .singleElement().satisfies(row -> assertThat(row)
+                        .containsEntry("action", "UPDATE").containsEntry("actor_login", login)
+                        .containsEntry("field", "requiredAction")
+                        .containsEntry("old_value", "orders.approve")
+                        .containsEntry("new_value", "orders.sign"));
     }
 
     private String adminToken() throws Exception {

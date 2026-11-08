@@ -118,6 +118,20 @@ class NumberGeneratorIntegrationTest {
     }
 
     @Test
+    void rollbackReleasesNumber() {
+        String first = transactions.execute(status -> {
+            String number = generator.next("ORDER");
+            status.setRollbackOnly();
+            return number;
+        });
+
+        assertThat(first).isEqualTo("ORD-2026-11-00001");
+        String second = transactions.execute(status -> generator.next("ORDER"));
+        assertThat(second).isEqualTo(first);
+        assertThat(repository.findByCode("ORDER").orElseThrow().getCounter()).isEqualTo(1L);
+    }
+
+    @Test
     void shouldBeGapFreeUnderConcurrency() throws Exception {
         assertThat(dataSource.unwrap(HikariDataSource.class).getMaximumPoolSize()).isGreaterThan(THREADS);
         CountDownLatch start = new CountDownLatch(1);

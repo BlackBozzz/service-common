@@ -23,22 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 /**
- * Слушатель Hibernate, пишущий журнал аудита для сущностей с {@link Audited}.
- *
- * <p>Регистрируется не как Spring-бин, а через {@link AuditHibernateIntegrator}. Правила записи:</p>
- * <ul>
- *     <li>INSERT и DELETE — одна строка без поля и значений;</li>
- *     <li>UPDATE — по строке на каждое изменённое свойство с прежним и новым значением;</li>
- *     <li>поля с {@link AuditIgnore} — значения заменяются на {@code ***};</li>
- *     <li>простые значения, enum и даты — через {@code toString()}, ссылки на сущности — их id,
- *     коллекции не пишутся;</li>
- *     <li>тип сущности — имя таблицы из {@code @Table(name)}, иначе физическое имя таблицы Hibernate
- *     (после стратегии именования) без схемы и кавычек;</li>
- *     <li>свойство {@code @Version} не пишется: смена версии сопровождает любое обновление.</li>
- * </ul>
- *
- * <p>Слушатель вызывается сразу после SQL-операции, до коммита: запись идёт в той же транзакции через
- * {@link AuditWriter} и откатывается вместе с изменением.</p>
+ * Слушатель Hibernate, пишущий журнал для сущностей с {@link Audited}; регистрируется через
+ * {@link AuditHibernateIntegrator}, а не как бин. Вызывается до коммита: строка журнала пишется в той же
+ * транзакции и откатывается вместе с изменением.
  */
 public class AuditEventListener
         implements PostInsertEventListener, PostUpdateEventListener, PostDeleteEventListener {
@@ -75,6 +62,7 @@ public class AuditEventListener
         Object[] newState = event.getState();
         SessionFactoryImplementor factory = event.getFactory();
         for (int index : changedProperties(event, types)) {
+            // Версия меняется при любом обновлении — отдельная строка для неё лишняя; коллекции не пишутся.
             if (index == versionIndex || types[index].isCollectionType()) {
                 continue;
             }

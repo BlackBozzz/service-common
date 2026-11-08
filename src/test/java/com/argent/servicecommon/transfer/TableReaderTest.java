@@ -175,6 +175,25 @@ class TableReaderTest {
                 .hasMessage("Распакованный XLSX превышает допустимый размер");
     }
 
+    /** Один элемент выше лимита на элемент: срабатывает любая из двух защит, обе дают TOO_LARGE_UNZIPPED. */
+    @Test
+    void shouldRejectSingleEntryOverPerEntryLimit() throws IOException {
+        byte[] zeros = new byte[11 * 1024 * 1024];
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(out)) {
+            zip.putNextEntry(new ZipEntry("xl/a.xml"));
+            zip.write(zeros);
+            zip.closeEntry();
+        }
+        byte[] bomb = out.toByteArray();
+        TableReader reader = new TableReader(1_000_000);
+
+        assertThat(bomb.length).isLessThan(100_000);
+        assertThatThrownBy(() -> reader.readXlsx(new ByteArrayInputStream(bomb)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(TableReader.TOO_LARGE_UNZIPPED);
+    }
+
     @Test
     void shouldReadNormalWorkbookUnderUnzippedLimit() {
         List<SheetData> sheets = new TableReader(1_000_000).readXlsx(new ByteArrayInputStream(workbook));

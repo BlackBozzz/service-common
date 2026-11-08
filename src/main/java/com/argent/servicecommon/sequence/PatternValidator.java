@@ -4,12 +4,8 @@ import java.util.IllegalFormatException;
 import java.util.regex.Pattern;
 
 /**
- * Проверка шаблона номера документа.
- *
- * <p>Шаблон форматируется {@link String#format} с аргументами {@code (ключ периода, счётчик)}:
- * {@code %1$s} — период, {@code %2$d} — счётчик, например {@code ORD-%1$s-%2$05d}. Шаблон
- * допустим, если пробное форматирование проходит и счётчик ({@code %2$d} или второй
- * последовательный {@code %d}) в нём присутствует.</p>
+ * Проверка шаблона номера пробным {@link String#format} с аргументами {@code (ключ периода, счётчик)}: шаблон
+ * должен форматироваться и содержать счётчик ({@code %2$d} или второй последовательный {@code %d}).
  */
 public final class PatternValidator {
 
@@ -22,24 +18,14 @@ public final class PatternValidator {
     private PatternValidator() {
     }
 
-    /**
-     * Проверяет шаблон номера.
-     *
-     * @param pattern шаблон
-     * @throws IllegalArgumentException если шаблон не форматируется или не содержит счётчика
-     */
+    /** @throws IllegalArgumentException шаблон не форматируется или не содержит счётчика */
     public static void validate(String pattern) {
         if (!isValid(pattern)) {
             throw new IllegalArgumentException("Недопустимый шаблон номера: " + pattern);
         }
     }
 
-    /**
-     * Проверяет шаблон номера без исключения.
-     *
-     * @param pattern шаблон
-     * @return {@code true}, если шаблон допустим
-     */
+    /** То же без исключения. */
     public static boolean isValid(String pattern) {
         if (pattern == null || !COUNTER.matcher(pattern.replace("%%", "")).find()) {
             return false;

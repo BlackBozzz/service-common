@@ -42,7 +42,7 @@ public record CommonSequenceDto(
         String periodKey,
 
         @DictionaryField(label = "Последнее значение", order = 50, readOnly = true,
-                description = "Меняется только при выдаче номера; продолжить нумерацию — SQL UPDATE, см. README")
+                description = "Меняется только при выдаче номера; продолжить нумерацию — SQL UPDATE, см. docs/reference.md")
         Long counter
 ) {
 }

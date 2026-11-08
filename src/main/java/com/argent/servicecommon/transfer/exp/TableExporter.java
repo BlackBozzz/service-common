@@ -41,26 +41,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Выгрузка {@link TableData} в XLSX, CSV и DOCX.
- *
- * <ul>
- *     <li>XLSX: жирная закреплённая шапка, ширина колонок по содержимому (не больше
- *     {@value #MAX_COLUMN_CHARS} символов), нативные ячейки: {@code NUMBER} — число, {@code DATE} —
- *     дата {@code dd.mm.yyyy}, {@code DATETIME} — {@code dd.mm.yyyy hh:mm}, {@code BOOLEAN} — «Да»/«Нет».
- *     Значение, которое не удалось привести к типу колонки, и даты раньше 1900 года (Excel их не
- *     поддерживает) пишутся текстом.</li>
- *     <li>CSV: UTF-8 с BOM, разделитель {@code ;}, строки через CRLF, числа с десятичной запятой —
- *     так файл открывается в Excel с русской локалью. Защита от CSV-инъекций: текст, начинающийся с
- *     {@code = + - @}, табуляции или CR, получает префикс {@code '}; настоящие числа не меняются.</li>
- *     <li>DOCX: абзац-заголовок и таблица с жирной шапкой; значения форматируются как в CSV.</li>
- * </ul>
- *
- * <p>Даты с часовым поясом ({@code Instant}, {@code OffsetDateTime}, {@code ZonedDateTime})
- * переводятся в часовой пояс сервера.</p>
- *
- * <p>Размер таблицы ограничен: не больше {@code maxColumns} колонок (по умолчанию 1000) и
- * {@code maxCells} ячеек данных, строки × колонки (по умолчанию 2 000 000); больше —
- * {@link IllegalArgumentException} (400).</p>
+ * Выгрузка {@link TableData} в XLSX, CSV (с защитой от CSV-инъекций) и DOCX в памяти; размер ограничен
+ * {@code maxColumns} и {@code maxCells}, чтобы защитить сервер.
  */
 public class TableExporter {
 
@@ -87,12 +69,7 @@ public class TableExporter {
         this(DEFAULT_MAX_COLUMNS, DEFAULT_MAX_CELLS);
     }
 
-    /**
-     * Экспортёр с лимитами размера таблицы.
-     *
-     * @param maxColumns наибольшее число колонок
-     * @param maxCells   наибольшее число ячеек данных (строки × колонки)
-     */
+    /** Экспортёр с лимитами колонок и ячеек данных (строки × колонки). */
     public TableExporter(int maxColumns, long maxCells) {
         if (maxColumns <= 0 || maxCells <= 0) {
             throw new IllegalArgumentException("Лимиты числа колонок и ячеек экспорта должны быть больше нуля");

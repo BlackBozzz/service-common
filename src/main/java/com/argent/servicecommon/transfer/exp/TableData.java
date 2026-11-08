@@ -9,16 +9,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Таблица для экспорта, не привязанная к сущностям: порядок и набор колонок задаёт {@code columns},
- * значение колонки в строке ищется по {@link Column#key()}.
- *
- * <p>Значения строк — обычные объекты Java ({@code Number}, {@code LocalDate}, {@code Boolean}, строки)
- * или их JSON-представления (числа, строки ISO-8601, {@code true/false}); преобразование по типу
- * колонки выполняет {@link TableExporter}.</p>
- *
- * @param title   заголовок таблицы: имя листа XLSX, заголовок DOCX и имя файла
- * @param columns колонки в порядке вывода
- * @param rows    строки, ключи — {@link Column#key()}; {@code null} — пустая ячейка
+ * Таблица для экспорта без привязки к сущностям: колонки задают порядок, значения строк ищутся по {@link Column#key()};
+ * значения — объекты Java или их JSON-представления, к типу колонки их приводит {@link TableExporter}.
  */
 public record TableData(String title, List<Column> columns, List<Map<String, Object>> rows) {
 
@@ -35,13 +27,7 @@ public record TableData(String title, List<Column> columns, List<Map<String, Obj
         rows = Collections.unmodifiableList(copy);
     }
 
-    /**
-     * Колонка таблицы.
-     *
-     * @param key   ключ значения в строке
-     * @param label заголовок колонки; пустой — используется ключ
-     * @param type  тип значения; {@code null} — {@link ColumnType#TEXT}
-     */
+    /** Колонка: пустой {@code label} — используется ключ, {@code type == null} — {@link ColumnType#TEXT}. */
     public record Column(String key, String label, ColumnType type) {
 
         public Column {

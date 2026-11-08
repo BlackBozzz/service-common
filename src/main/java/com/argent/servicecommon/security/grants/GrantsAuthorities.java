@@ -10,12 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Преобразование грантов в authorities Spring Security и операции над грантами.
- *
- * <p>Authorities: {@code table:<t>:read}, {@code table:<t>:write} (ключ {@code *} сохраняется буквально,
- * например {@code table:*:read}) и {@code action:<a>}.</p>
- */
+/** Гранты ↔ authorities: {@code table:<t>:<op>} (ключ {@code *} сохраняется буквально) и {@code action:<a>}. */
 public final class GrantsAuthorities {
 
     /** Префикс authority таблицы. */

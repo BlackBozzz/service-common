@@ -9,11 +9,7 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-/**
- * Тип статуса — набор статусов одной сущности приложения (например, {@code ORDER_STATUS}).
- *
- * <p>Библиотечный справочник: таблицу создаёт миграция V4, запись реестра вставляет та же миграция.</p>
- */
+/** Тип статуса — набор статусов одной сущности (например, {@code ORDER_STATUS}); библиотечный справочник из V4. */
 @Entity
 @Table(name = "common_status_type")
 @ArgentDictionary(name = "Типы статусов", dtoClass = CommonStatusTypeDto.class)

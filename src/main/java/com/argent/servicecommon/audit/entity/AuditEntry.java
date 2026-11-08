@@ -9,11 +9,7 @@ import lombok.Setter;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Запись журнала аудита: одно изменение поля (или факт вставки/удаления) сущности.
- *
- * <p>Обычная JPA-сущность, не справочник. Таблицу создаёт миграция V4.</p>
- */
+/** Строка журнала аудита: изменение поля или факт действия над записью; таблицу создаёт миграция V4. */
 @Entity
 @Table(name = "common_audit_entry")
 @Getter
@@ -34,7 +30,7 @@ public class AuditEntry {
     @Column(name = "entity_id")
     private String entityId;
 
-    /** Действие: INSERT, UPDATE, DELETE или REPLACE. */
+    /** INSERT, UPDATE, DELETE, REPLACE (импорт), ATTACH или DETACH (вложения). */
     @Column(nullable = false, length = 10)
     private String action;
 
@@ -42,27 +38,21 @@ public class AuditEntry {
     @Column
     private String field;
 
-    /** Прежнее значение. */
     @Column(name = "old_value", columnDefinition = "text")
     private String oldValue;
 
-    /** Новое значение. */
     @Column(name = "new_value", columnDefinition = "text")
     private String newValue;
 
-    /** Идентификатор пользователя, выполнившего изменение. */
     @Column(name = "actor_id")
     private UUID actorId;
 
-    /** Логин пользователя, выполнившего изменение. */
     @Column(name = "actor_login", length = 255)
     private String actorLogin;
 
-    /** Момент изменения. */
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    /** Проставляет момент изменения, если он не задан явно. */
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

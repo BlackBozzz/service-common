@@ -26,11 +26,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Автоконфигурация импорта и экспорта таблиц: чтение XLSX/CSV, преобразование значений, сервис
- * импорта, REST {@code /api/import/dictionaries} и ответ на отменённый импорт; выгрузка таблиц и
- * справочников в XLSX/CSV/DOCX и REST {@code /api/export}.
- *
- * <p>{@link AuditRecorder} по умолчанию ничего не делает; модуль аудита заменяет его своим бином.</p>
+ * Импорт и экспорт таблиц: чтение XLSX/CSV, сервис и REST импорта, выгрузка в XLSX/CSV/DOCX и REST экспорта.
+ * {@link AuditRecorder} по умолчанию ничего не делает; модуль аудита заменяет его своим бином.
  */
 @AutoConfiguration(after = {
         ServiceCommonAutoConfiguration.class,

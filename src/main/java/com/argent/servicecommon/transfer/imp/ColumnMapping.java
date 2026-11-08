@@ -10,15 +10,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Сопоставление заголовков листа с полями справочника и ключевые поля для UPSERT.
- *
- * <p>Заголовок, отсутствующий в {@code headerToField}, считается несопоставленным: импорт сообщает
- * «Колонка не сопоставлена с полем: …» (при {@code fail-all} лист не импортируется). Заголовок со
- * значением {@code null} или пустой строкой явно игнорируется. Пустой {@code keyFields} означает
- * ключ по умолчанию из аннотаций сущности (см. {@link EntityKeyFields}).</p>
- *
- * @param headerToField заголовок → имя поля DTO
- * @param keyFields     ключевые поля для UPSERT
+ * Заголовок листа → поле DTO и ключевые поля UPSERT; заголовка нет в карте — «Колонка не сопоставлена с полем: …»,
+ * значение {@code null}/пустое — колонка игнорируется, пустой {@code keyFields} — ключ из {@link EntityKeyFields}.
  */
 public record ColumnMapping(Map<String, String> headerToField, List<String> keyFields) {
 

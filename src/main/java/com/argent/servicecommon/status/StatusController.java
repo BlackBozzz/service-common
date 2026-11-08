@@ -12,9 +12,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * REST статусной машины: {@code GET /api/status/{type}/transitions?from=} — статусы, в которые текущий
- * пользователь может перевести запись из статуса {@code from}. Без {@code from} (или с пустым значением) —
- * статусы, доступные при создании записи. Доступен любому вошедшему; неизвестный тип или статус — 404.
+ * REST {@code GET /api/status/{type}/transitions?from=}: статусы, доступные текущему пользователю из {@code from}
+ * (без него — при создании). Любой вошедший; неизвестный тип или статус — 404.
  */
 @RestController
 @RequestMapping("/api/status")

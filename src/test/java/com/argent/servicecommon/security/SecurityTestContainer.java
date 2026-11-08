@@ -48,5 +48,8 @@ public final class SecurityTestContainer {
         registry.add("argent.auth.bootstrap-admin.password", () -> "test-admin-pass");
         registry.add("argent.auth.jwt.key-file", () -> Path.of(
                 System.getProperty("java.io.tmpdir"), "argent-test-" + UUID.randomUUID() + ".pem").toString());
+        // Вложения пишутся во временную папку, а не в ./data/attachments рабочей папки.
+        registry.add("argent.attachments.root", () -> Path.of(
+                System.getProperty("java.io.tmpdir"), "argent-test-attachments-" + UUID.randomUUID()).toString());
     }
 }

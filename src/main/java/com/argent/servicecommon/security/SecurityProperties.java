@@ -5,13 +5,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 import java.util.List;
 
-/**
- * Настройки цепочки фильтров безопасности ({@code argent.security.*}).
- *
- * @param permitPaths дополнительные шаблоны путей, доступные без входа
- * @param cors        настройки CORS для {@code /api/**}
- * @param actions     действия приложения для каталога подсказок в редакторе ролей
- */
+/** Настройки цепочки фильтров {@code argent.security.*}: открытые пути, CORS и действия для редактора ролей. */
 @ConfigurationProperties("argent.security")
 public record SecurityProperties(
         @DefaultValue List<String> permitPaths,
@@ -24,11 +18,7 @@ public record SecurityProperties(
         actions = actions == null ? List.of() : List.copyOf(actions);
     }
 
-    /**
-     * Настройки CORS.
-     *
-     * @param allowedOrigins разрешённые источники; пустой список отключает настройку CORS
-     */
+    /** CORS для {@code /api/**}; пустой список источников — CORS не настраивается. */
     public record Cors(@DefaultValue List<String> allowedOrigins) {
 
         public Cors {

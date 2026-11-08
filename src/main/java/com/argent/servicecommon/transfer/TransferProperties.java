@@ -5,17 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * Настройки импорта и экспорта таблиц ({@code argent.transfer.*}).
- *
- * <p>Лимит {@code max-upload-bytes} проверяется контроллером и {@code TableReader}. Spring
- * ограничивает multipart своими настройками {@code spring.servlet.multipart.max-file-size} и
- * {@code max-request-size} (по умолчанию 1 МБ) — приложению нужно поднять их до этого лимита.</p>
- *
- * @param maxUploadBytes наибольший размер загружаемого файла, по умолчанию 20 МБ
- * @param maxRows        наибольшее число строк данных на лист, по умолчанию 100 000
- * @param importOnError  стратегия обработки ошибочных строк, по умолчанию {@code fail-all}
- * @param exportMaxColumns наибольшее число колонок экспорта, по умолчанию 1000
- * @param exportMaxCells   наибольшее число ячеек экспорта (строки × колонки), по умолчанию 2 000 000
+ * Настройки импорта и экспорта {@code argent.transfer.*}; лимиты должны быть больше нуля. Лимиты multipart Spring
+ * приложение поднимает до {@code max-upload-bytes} отдельно.
  */
 @ConfigurationProperties("argent.transfer")
 public record TransferProperties(

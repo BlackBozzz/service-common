@@ -14,9 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.context.annotation.Bean;
 
 /**
- * REST администрирования пользователей и ролей и каталог грантов для сервлетного приложения.
- *
- * <p>Отключается вместе с остальной безопасностью свойством {@code argent.security.enabled=false}.</p>
+ * REST администрирования пользователей, ролей и каталога грантов; выключается {@code argent.security.enabled=false}.
  */
 @AutoConfiguration(after = SecurityAutoConfiguration.class)
 @ConditionalOnProperty(name = "argent.security.enabled", havingValue = "true", matchIfMissing = true)

@@ -28,22 +28,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Преобразует строку ячейки в значение типа поля DTO.
- *
- * <ul>
- *     <li>Числа: русская ({@code 1 234,50}) и английская ({@code 1,234.50}) запись. Пробелы, в том числе
- *     неразрывные, удаляются. Если есть и точка, и запятая, десятичным разделителем считается последний
- *     знак. Одна запятая — десятичный разделитель ({@code 1,5}), кроме целых полей с группами по три
- *     цифры ({@code 1,234}).</li>
- *     <li>Логические: {@code да/нет}, {@code true/false}, {@code 1/0}, {@code yes/no}.</li>
- *     <li>Даты: {@code дд.мм.гггг} и ISO; дата-время — также {@code дд.мм.гггг чч:мм[:сс]}.</li>
- *     <li>Перечисления: имя константы без учёта регистра.</li>
- *     <li>Ссылка на справочник: точное совпадение подписи (поле отображения целевого справочника) без
- *     учёта регистра; результат — {@code Map} с идентификатором и подписью.</li>
- * </ul>
- *
- * <p>Пустая строка даёт {@code null}. Ошибка преобразования — {@link IllegalArgumentException}
- * с сообщением для пользователя.</p>
+ * Строка ячейки → значение типа поля DTO (русская и английская запись чисел, да/нет, дд.мм.гггг и ISO, enum, ссылка
+ * по подписи); пустая строка — {@code null}, ошибка — {@link IllegalArgumentException} с текстом для пользователя.
  */
 public class ValueConverter {
 
@@ -66,14 +52,7 @@ public class ValueConverter {
         return convert(field, javaType, raw, new HashMap<>());
     }
 
-    /**
-     * Преобразует значение; найденные ссылки кэшируются в {@code referenceCache} в пределах импорта.
-     *
-     * @param field          описание поля из схемы справочника
-     * @param javaType       тип свойства DTO
-     * @param raw            строка ячейки
-     * @param referenceCache кэш «справочник + подпись → ссылка»
-     */
+    /** Преобразует значение; найденные ссылки кэшируются в {@code referenceCache} в пределах импорта. */
     public Object convert(DynamicFieldDefinition field, Class<?> javaType, String raw,
                           Map<String, Map<String, Object>> referenceCache) {
         if (raw == null || raw.isBlank()) return null;

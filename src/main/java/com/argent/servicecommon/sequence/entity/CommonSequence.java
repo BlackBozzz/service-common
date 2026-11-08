@@ -12,16 +12,12 @@ import org.hibernate.annotations.DynamicUpdate;
 import java.util.UUID;
 
 /**
- * Счётчик номеров документов.
+ * Счётчик номеров документов (библиотечный справочник, таблица из V4).
  *
- * <p>{@link #pattern} — шаблон в стиле {@link String#format}, {@link #periodKey} — ключ текущего
- * периода сброса, {@link #counter} — последнее выданное значение. Библиотечный справочник:
- * таблицу создаёт миграция V4.</p>
- *
- * <p>{@link DynamicUpdate}: правка через админку обновляет только изменённые колонки и не
- * перезаписывает {@code counter}/{@code period_key}, которые параллельно меняет
- * {@link com.argent.servicecommon.sequence.NumberGenerator}. Правки аудируются; выдача номеров идёт
- * через JDBC и в журнал не попадает.</p>
+ * <p>{@link DynamicUpdate}: правка через админку обновляет только изменённые колонки и не перезаписывает
+ * {@code counter}/{@code period_key}, которые параллельно меняет
+ * {@link com.argent.servicecommon.sequence.NumberGenerator}.
+ * Правки аудируются; выдача номеров идёт через JDBC и в журнал не попадает.</p>
  */
 @Entity
 @DynamicUpdate

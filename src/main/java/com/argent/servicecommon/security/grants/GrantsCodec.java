@@ -14,13 +14,9 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Разбор и запись JSON-грантов роли вида
- * {@code {"tables": {"<таблица>|*": ["read", "write"]}, "actions": ["<код>"]}}.
- *
- * <p>Разбор строгий: неизвестные ключи, недопустимые имена таблиц, операции и коды действий
- * отклоняются {@link ValidationErrorsException} с полями {@value #FIELD}, {@value #FIELD_TABLES}
- * и {@value #FIELD_ACTIONS}. Набор операций таблицы должен быть непустым.
- * Отсутствующие или {@code null}-разделы считаются пустыми.</p>
+ * Строгий разбор и запись JSON-грантов {@code {"tables": {...}, "actions": [...]}}: ошибки —
+ * {@link ValidationErrorsException} с полями {@value #FIELD}, {@value #FIELD_TABLES}, {@value #FIELD_ACTIONS};
+ * отсутствующие разделы — пустые.
  */
 public final class GrantsCodec {
 

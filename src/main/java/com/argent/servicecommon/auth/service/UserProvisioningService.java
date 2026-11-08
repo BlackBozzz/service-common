@@ -7,10 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 
 /**
- * Импорт пользователей из внешних источников.
- *
- * <p>Создаёт пользователя без пароля и ролей или обновляет отображаемое имя существующего;
- * роли, пароль и признак активности существующего пользователя не меняются.</p>
+ * Импорт пользователей из внешних источников: создаёт пользователя без пароля и ролей или обновляет имя;
+ * роли, пароль и активность существующего не меняются.
  */
 public class UserProvisioningService {
 
@@ -20,13 +18,7 @@ public class UserProvisioningService {
         this.userRepository = Objects.requireNonNull(userRepository);
     }
 
-    /**
-     * Создаёт пользователя или обновляет его отображаемое имя.
-     *
-     * @param login       логин; пробелы по краям отбрасываются
-     * @param displayName отображаемое имя
-     * @return сохранённый пользователь
-     */
+    /** Создаёт пользователя или обновляет его отображаемое имя; пробелы по краям логина отбрасываются. */
     @Transactional
     public User upsert(String login, String displayName) {
         String normalizedLogin = login.trim();

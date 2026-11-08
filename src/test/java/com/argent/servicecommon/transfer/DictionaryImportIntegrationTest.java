@@ -1,5 +1,7 @@
 package com.argent.servicecommon.transfer;
 
+import com.argent.servicecommon.audit.entity.AuditEntry;
+import com.argent.servicecommon.audit.repository.AuditEntryRepository;
 import com.argent.servicecommon.auth.entity.User;
 import com.argent.servicecommon.auth.repository.UserRepository;
 import com.argent.servicecommon.auth.repository.UserSessionRepository;
@@ -563,6 +565,64 @@ class DictionaryImportIntegrationTest {
                 .isZero();
     }
 
+    @Test
+    void adminActionPassesImportCheck() throws Exception {
+        byte[] file = xlsx("Страны", table(List.of("Название"), Arrays.asList("Франция")));
+
+        upload(tokenWith("{\"actions\":[\"admin\"],\"tables\":{\"imp_country\":[\"read\",\"write\"]}}"),
+                "imp_country", file, "countries.xlsx", "mode", "REPLACE")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(1));
+    }
+
+    @Test
+    void workbookImportRequiresAuth() throws Exception {
+        byte[] file = xlsx("imp_region", table(List.of("Название"), Arrays.asList("Южный")));
+
+        mvc.perform(multipart(BASE).file(new MockMultipartFile("file", "book.xlsx", XLSX, file))
+                        .param("mode", "UPSERT"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void workbookImportWithWildcardWrite() throws Exception {
+        Map<String, List<List<Object>>> sheets = new LinkedHashMap<>();
+        sheets.put("imp_country", table(List.of("Название"), Arrays.asList("Франция")));
+        sheets.put("imp_region", table(List.of("Название"), Arrays.asList("Южный")));
+
+        uploadWorkbook(tokenWith("{\"actions\":[\"import\"],\"tables\":{\"*\":[\"read\",\"write\"]}}"),
+                xlsx(sheets), "mode", "UPSERT")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].report.failed").value(0))
+                .andExpect(jsonPath("$[1].report.failed").value(0));
+
+        assertThat(jdbc.queryForObject("select count(*) from imp_country where name = 'Франция'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void replaceWritesAuditRowThroughService() throws Exception {
+        jdbc.update("delete from common_audit_entry where entity_type = 'imp_country'");
+        insertCountry("Старая", 1, null);
+        byte[] file = xlsx("Страны", table(List.of("Название"), Arrays.asList("Франция")));
+
+        upload(tokenWith(WRITER), "imp_country", file, "countries.xlsx", "mode", "REPLACE")
+                .andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("select count(*) from common_audit_entry where action = 'REPLACE' "
+                + "and entity_type = 'imp_country' and entity_id is null", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void upsertEmptySheetReturns400() throws Exception {
+        byte[] file = xlsx("Страны", table(List.of("Название")));
+
+        upload(tokenWith(WRITER), "imp_country", file, "countries.xlsx", "mode", "UPSERT", "keyFields", "name")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.report.errors[0].message").value("Лист не содержит данных"));
+    }
+
     private ResultActions upload(String token, String code, byte[] file, String filename, String... params)
             throws Exception {
         MockMultipartHttpServletRequestBuilder request = multipart(BASE + "/" + code)
@@ -665,9 +725,9 @@ class DictionaryImportIntegrationTest {
     /** Тестовая конфигурация с фикстурами-справочниками импорта. */
     @SpringBootConfiguration
     @EnableAutoConfiguration
-    @EntityScan(basePackageClasses = {CommonDictionary.class, User.class, Role.class, ImpCountry.class})
+    @EntityScan(basePackageClasses = {CommonDictionary.class, User.class, Role.class, ImpCountry.class, AuditEntry.class})
     @EnableJpaRepositories(basePackageClasses = {
-            CommonDictionaryRepository.class, UserRepository.class, RoleRepository.class
+            CommonDictionaryRepository.class, UserRepository.class, RoleRepository.class, AuditEntryRepository.class
     })
     static class TestApplication {
     }

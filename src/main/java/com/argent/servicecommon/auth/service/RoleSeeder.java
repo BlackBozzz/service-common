@@ -31,18 +31,9 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Загружает стартовые роли приложения из {@code argent.auth.roles-file} при запуске.
- *
- * <p>Файл — JSON-массив ролей {@code {code, name, description?, grants}}; необязателен: если ресурса нет,
- * в журнал пишется сообщение и ничего не происходит. Весь файл проверяется до записи в БД; любая ошибка
- * (формат JSON, код роли, имя, гранты) прерывает запуск {@link IllegalStateException} с именем файла
- * и кодом роли.</p>
- *
- * <p>Режим {@link RolesFileMode#CREATE} создаёт только роли, которых ещё нет по коду, чтобы правки
- * администратора переживали перезапуск. Режим {@link RolesFileMode#OVERWRITE} дополнительно приводит
- * имя, описание и гранты существующих несистемных ролей к файлу. Роли, которых нет в файле, не меняются.
- * Признак {@code system} из файла игнорируется; роль {@code ADMIN} в файле игнорируется — её определяет
- * библиотека ({@link BootstrapAdminInitializer}). Загрузка выполняется одной транзакцией.</p>
+ * Загружает стартовые роли из {@code argent.auth.roles-file} одной транзакцией; файл проверяется целиком, ошибка
+ * прерывает запуск. {@link RolesFileMode#CREATE} не трогает существующие роли, чтобы правки администратора
+ * переживали перезапуск.
  */
 @Order(RoleSeeder.ORDER)
 public class RoleSeeder implements ApplicationRunner, Ordered {
@@ -66,12 +57,7 @@ public class RoleSeeder implements ApplicationRunner, Ordered {
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * @param location       расположение файла ролей в формате {@link ResourceLoader}
-     *                       (например {@code classpath:argent-roles.json} или {@code file:./roles.json})
-     * @param mode           режим загрузки
-     * @param resourceLoader загрузчик ресурса
-     * @param roleRepository репозиторий ролей
-     * @param transactionManager менеджер транзакций
+     * {@code location} — ресурс {@link ResourceLoader}: {@code classpath:argent-roles.json}, {@code file:./roles.json}.
      */
     public RoleSeeder(String location, RolesFileMode mode, ResourceLoader resourceLoader,
             RoleRepository roleRepository, PlatformTransactionManager transactionManager) {
@@ -87,11 +73,7 @@ public class RoleSeeder implements ApplicationRunner, Ordered {
         seed();
     }
 
-    /**
-     * Читает файл ролей, проверяет его целиком и применяет в одной транзакции.
-     *
-     * @throws IllegalStateException если файл некорректен
-     */
+    /** @throws IllegalStateException если файл ролей некорректен */
     public void seed() {
         Resource resource = resourceLoader.getResource(location);
         if (!resource.exists()) {

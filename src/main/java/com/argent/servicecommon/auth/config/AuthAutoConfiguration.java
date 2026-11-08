@@ -24,9 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * Автоконфигурация входа, регистрации, импорта пользователей и bootstrap-администратора.
- *
- * <p>Отключается вместе с остальной безопасностью свойством {@code argent.security.enabled=false}.</p>
+ * Вход, регистрация, импорт пользователей, bootstrap-администратор; выключается {@code argent.security.enabled=false}.
  */
 @AutoConfiguration(after = SecurityAutoConfiguration.class)
 @ConditionalOnProperty(name = "argent.security.enabled", havingValue = "true", matchIfMissing = true)

@@ -1,5 +1,7 @@
 package com.argent.servicecommon.security;
 
+import com.argent.servicecommon.attachment.entity.Attachment;
+import com.argent.servicecommon.attachment.repository.AttachmentRepository;
 import com.argent.servicecommon.audit.entity.AuditEntry;
 import com.argent.servicecommon.audit.repository.AuditEntryRepository;
 import com.argent.servicecommon.auth.entity.User;
@@ -24,11 +26,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableAutoConfiguration
 @EntityScan(basePackageClasses = {
         CommonDictionary.class, User.class, Role.class,
-        CommonStatus.class, CommonSequence.class, AuditEntry.class
+        CommonStatus.class, CommonSequence.class, AuditEntry.class, Attachment.class
 })
 @EnableJpaRepositories(basePackageClasses = {
         CommonDictionaryRepository.class, UserRepository.class, RoleRepository.class,
-        CommonStatusRepository.class, CommonSequenceRepository.class, AuditEntryRepository.class
+        CommonStatusRepository.class, CommonSequenceRepository.class, AuditEntryRepository.class,
+        AttachmentRepository.class
 })
 public class SecurityTestApplication {
 }

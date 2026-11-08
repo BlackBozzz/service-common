@@ -23,12 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Вход пользователя и сведения о текущем пользователе.
- *
- * <p>При {@code argent.auth.password-required=false} вход выполняется только по логину,
- * иначе — по логину и паролю.</p>
- */
+/** Вход по логину (и паролю, если {@code argent.auth.password-required}) и сведения о текущем пользователе. */
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
@@ -58,8 +53,6 @@ public class AuthService {
     /**
      * Проверяет логин (и пароль, если он требуется) и выдаёт токен новой сессии.
      *
-     * @param request логин и пароль; пробелы по краям логина отбрасываются
-     * @return токен для заголовка {@code Authorization: Bearer <token>}
      * @throws BadCredentialsException если пользователь не найден, заблокирован, пароль не задан или неверен
      */
     public String login(LoginRequest request) {

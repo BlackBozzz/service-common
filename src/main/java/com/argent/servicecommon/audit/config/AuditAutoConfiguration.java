@@ -22,14 +22,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Автоконфигурация аудита: слушатель Hibernate для сущностей с {@code @Audited}, запись REPLACE
- * импорта ({@link AuditRecorder}) и REST {@code GET /api/audit}.
+ * Автоконфигурация аудита: слушатель Hibernate для {@code @Audited}, {@link AuditRecorder} для REPLACE и REST
+ * {@code GET /api/audit}; включается, только если есть {@link AuditEntryRepository}.
  *
- * <p>Слушатель подключается через {@link HibernatePropertiesCustomizer}: в свойство
- * {@code hibernate.integrator_provider} кладётся провайдер с {@link AuditHibernateIntegrator}; интеграторы
- * провайдера, заданного приложением, сохраняются. Включается, только если в контексте есть
- * {@link AuditEntryRepository}. Обрабатывается до автоконфигурации импорта, чтобы заменить её
- * {@link AuditRecorder} без действий.</p>
+ * <p>Слушатель кладётся в {@code hibernate.integrator_provider} через {@link HibernatePropertiesCustomizer}
+ * (интеграторы провайдера приложения сохраняются), поэтому собственный {@code EntityManagerFactory} приложения
+ * обходит аудит. Обрабатывается до автоконфигурации импорта ({@code before = TransferAutoConfiguration}), чтобы
+ * его {@link AuditRecorder} заменил рекордер импорта без действий.</p>
  */
 @AutoConfiguration(
         after = ServiceCommonAutoConfiguration.class,

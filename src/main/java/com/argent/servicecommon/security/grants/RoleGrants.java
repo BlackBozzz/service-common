@@ -7,15 +7,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/**
- * Гранты роли: операции по таблицам и коды действий.
- *
- * <p>Неизменяемое значение: коллекции копируются и оборачиваются в неизменяемые,
- * {@code null} заменяется пустой коллекцией. Ключ {@code *} в {@link #tables} означает любую таблицу.</p>
- *
- * @param tables  операции по именам таблиц (или {@code *})
- * @param actions коды разрешённых действий
- */
+/** Неизменяемые гранты роли: операции по таблицам (ключ {@code *} — любая) и коды действий; {@code null} — пусто. */
 public record RoleGrants(Map<String, Set<GrantOp>> tables, Set<String> actions) {
 
     private static final RoleGrants EMPTY = new RoleGrants(Map.of(), Set.of());

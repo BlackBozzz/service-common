@@ -14,6 +14,7 @@ import com.argent.servicecommon.security.repository.RoleRepository;
 import com.argent.servicecommon.security.repository.UserRoleRepository;
 import com.argent.servicecommon.transfer.exp.DictionaryExportService;
 import com.argent.servicecommon.transfer.exp.TableData;
+import com.argent.servicecommon.transfer.exp.TableExporter;
 import com.argent.servicecommon.transfer.impfixture.ImpCountry;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
@@ -254,6 +255,24 @@ class DictionaryExportIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Слишком много ячеек: " + 8 * columns
                         + ", допустимо не более 40"));
+    }
+
+    @Test
+    void exportsMoreThanOnePage() {
+        // Лимит ячеек класса (40) мал для 150 строк: страницы читает сервис, XLSX собирает экспортёр по умолчанию.
+        for (int i = 0; i < 148; i++) {
+            jdbc.update("insert into imp_country(name, code) values (?, ?)", "Страна " + i, "C" + i);
+        }
+
+        TableData data = exportService.build("imp_country", null, "name,asc");
+        byte[] xlsx = new TableExporter().toXlsx(data);
+
+        assertThat(data.rows()).hasSize(150);
+        try (XSSFWorkbook book = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
+            assertThat(book.getSheetAt(0).getLastRowNum()).isEqualTo(150);
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
     }
 
     private static String tableJson() {

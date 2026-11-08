@@ -12,3 +12,4 @@ com.argent.servicecommon.transfer.config.TransferAutoConfiguration
 com.argent.servicecommon.status.config.StatusAutoConfiguration
 com.argent.servicecommon.sequence.config.SequenceAutoConfiguration
 com.argent.servicecommon.audit.config.AuditAutoConfiguration
+com.argent.servicecommon.attachment.config.AttachmentAutoConfiguration

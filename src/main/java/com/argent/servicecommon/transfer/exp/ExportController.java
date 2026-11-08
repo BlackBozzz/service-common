@@ -17,17 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * REST экспорта таблиц в XLSX, CSV и DOCX. Ответ — файл с {@code Content-Disposition: attachment}
- * (имя в UTF-8 по заголовку таблицы) и {@code X-Content-Type-Options: nosniff}. PDF не поддерживается:
- * 400 «Формат PDF не поддерживается».
- *
- * <ul>
- *     <li>{@code POST /api/export/{format}} — тело {@link TableData}; доступен любому вошедшему
- *     (данные присылает сам клиент). Больше {@code argent.transfer.max-rows} строк — 400.</li>
- *     <li>{@code GET /api/export/dictionaries/{code}?format=xlsx|csv|docx&search=&sort=} — справочник
- *     целиком с поиском и сортировкой универсальной таблицы; требует право {@code read} на
- *     справочник. Формат по умолчанию — {@code xlsx}.</li>
- * </ul>
+ * REST экспорта {@code /api/export}: присланной таблицы (любой вошедший) и справочника (право {@code read}) в
+ * XLSX/CSV/DOCX; файл с {@code Content-Disposition: attachment} и {@code nosniff}.
  */
 @RestController
 @RequestMapping("/api/export")

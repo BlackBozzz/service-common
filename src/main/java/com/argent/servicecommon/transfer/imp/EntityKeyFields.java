@@ -15,13 +15,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Ключевые поля UPSERT по умолчанию, найденные рефлексией по JPA-сущности.
- *
- * <p>Порядок: первое поле с {@code @Column(unique = true)} или {@code @JoinColumn(unique = true)};
- * иначе первое ограничение {@code @Table(uniqueConstraints)}, имена колонок которого переводятся в
- * имена полей (явное {@code @Column(name)}/{@code @JoinColumn(name)}, иначе имя поля в snake_case,
- * для {@code @ManyToOne}/{@code @OneToOne} — с суффиксом {@code _id}). Если хотя бы одна колонка
- * ограничения не найдена среди полей или уникального ключа нет, возвращается пустой список.</p>
+ * Ключ UPSERT по умолчанию: первое поле с {@code unique = true}, иначе первое {@code @Table(uniqueConstraints)} с
+ * колонками, переведёнными в поля; иначе пустой список.
  */
 public final class EntityKeyFields {
 

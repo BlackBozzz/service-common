@@ -22,12 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.Objects;
 
 /**
- * Создаёт системную роль {@code ADMIN} и администратора {@code argent.auth.bootstrap-admin} при запуске
- * и назначает ему эту роль.
- *
- * <p>Гранты роли {@code ADMIN} при каждом запуске приводятся к {@link GrantConstants#ADMIN_GRANTS}.
- * Пароль существующего администратора не меняется. Если пароль обязателен, а администратора
- * ещё нет и пароль не задан, запуск прерывается.</p>
+ * Создаёт при запуске роль {@code ADMIN} (гранты выравниваются каждый запуск) и администратора
+ * {@code argent.auth.bootstrap-admin}. Пароль существующего не меняется; в парольном режиме без администратора
+ * и пароля запуск прерывается.
  */
 @Order(BootstrapAdminInitializer.ORDER)
 public class BootstrapAdminInitializer implements ApplicationRunner, Ordered {
@@ -64,10 +61,7 @@ public class BootstrapAdminInitializer implements ApplicationRunner, Ordered {
     }
 
     /**
-     * Создаёт роль {@code ADMIN}, если её нет, и выравнивает существующую: системная,
-     * гранты — {@link GrantConstants#ADMIN_GRANTS}. Имя и описание существующей роли не меняются.
-     *
-     * @return роль администратора
+     * Создаёт или выравнивает {@code ADMIN}: системная, гранты — {@link GrantConstants#ADMIN_GRANTS}, имя не меняется.
      */
     public Role ensureAdminRole() {
         Role role = roleRepository.findByCode(GrantConstants.ADMIN_ROLE_CODE).orElseGet(() -> {

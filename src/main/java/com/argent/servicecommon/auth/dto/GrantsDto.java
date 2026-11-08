@@ -7,13 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Гранты в ответах REST: эффективные права пользователя или гранты одной роли.
- *
- * @param tables  операции ({@code read}, {@code write}) по именам таблиц, ключи по алфавиту;
- *                ключ {@code *} означает любую таблицу
- * @param actions коды разрешённых действий по алфавиту
- */
+/** Гранты в ответах REST: операции по таблицам ({@code *} — любая) и действия, всё по алфавиту. */
 public record GrantsDto(Map<String, List<String>> tables, List<String> actions) {
 
     /** Представление грантов: таблицы и действия по алфавиту, операции строчными по алфавиту. */

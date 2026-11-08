@@ -18,9 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Самостоятельная регистрация пользователя ({@code POST /api/auth/register}).
- *
- * <p>Работает, только если включена {@code argent.auth.registration.enabled}; по умолчанию выключена.</p>
+ * Самостоятельная регистрация {@code POST /api/auth/register}; работает при {@code argent.auth.registration.enabled}.
  */
 public class RegistrationService {
 
@@ -43,14 +41,12 @@ public class RegistrationService {
     }
 
     /**
-     * Создаёт пользователя с паролем (BCrypt), назначает роли из
-     * {@code argent.auth.registration.default-roles} и выдаёт токен. Всё выполняется одной транзакцией.
+     * Создаёт пользователя, назначает роли {@code argent.auth.registration.default-roles} и выдаёт токен —
+     * одной транзакцией.
      *
-     * @param request логин, отображаемое имя, пароль
-     * @return токен для заголовка {@code Authorization: Bearer <token>}
      * @throws RegistrationDisabledException если регистрация выключена (403)
-     * @throws ValidationErrorsException если логин занят (400, поле {@code login})
-     * @throws IllegalStateException     если роль из настроек не существует
+     * @throws ValidationErrorsException     если логин занят (400, поле {@code login})
+     * @throws IllegalStateException         если роль из настроек не существует
      */
     @Transactional
     public String register(RegisterRequest request) {

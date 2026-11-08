@@ -3,16 +3,8 @@ package com.argent.servicecommon.transfer.imp;
 import java.util.List;
 
 /**
- * Отчёт об импорте листа.
- *
- * <p>Если импорт листа отменён (стратегия {@code fail-all} или ошибка базы данных), {@code created} и
- * {@code updated} равны нулю, а {@code failed} — числу строк с ошибками; остальные строки откатаны.</p>
- *
- * @param total   число непустых строк данных
- * @param created создано записей
- * @param updated обновлено записей
- * @param failed  строк с ошибками
- * @param errors  ошибки по строкам в порядке файла
+ * Отчёт о листе: {@code total} — непустые строки данных. У отменённого листа {@code created = updated = 0},
+ * {@code failed} — строки с ошибками, остальное откатано.
  */
 public record ImportReport(int total, int created, int updated, int failed, List<ImportError> errors) {
 

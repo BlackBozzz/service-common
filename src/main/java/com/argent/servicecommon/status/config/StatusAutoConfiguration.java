@@ -12,11 +12,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 
 /**
- * Автоконфигурация статусной машины: {@link StatusTransitionService} и REST
- * {@code /api/status/{type}/transitions}.
- *
- * <p>Включается, только если в контексте есть репозитории статусов (приложение, задающее свой
- * {@code @EnableJpaRepositories} без пакета {@code status}, статусную машину не получает).</p>
+ * Статусная машина: {@link StatusTransitionService} и REST {@code /api/status/{type}/transitions}; включается,
+ * только если есть репозитории статусов.
  */
 @AutoConfiguration(
         after = ServiceCommonAutoConfiguration.class,

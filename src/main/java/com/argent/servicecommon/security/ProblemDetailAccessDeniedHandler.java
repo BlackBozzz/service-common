@@ -9,12 +9,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 
-/**
- * Отвечает 403 в формате ProblemDetail, когда цепочка фильтров отказывает вошедшему пользователю.
- *
- * <p>Отказы {@code @PreAuthorize} внутри контроллеров обрабатывает
- * {@link com.argent.servicecommon.error.ArgentExceptionHandler} с тем же форматом ответа.</p>
- */
+/** 403 ProblemDetail при отказе цепочки фильтров; отказы {@code @PreAuthorize} обрабатывает ArgentExceptionHandler. */
 public class ProblemDetailAccessDeniedHandler implements AccessDeniedHandler {
 
     private final ProblemDetailResponseWriter writer;

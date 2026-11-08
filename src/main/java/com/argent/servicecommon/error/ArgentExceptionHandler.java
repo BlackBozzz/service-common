@@ -9,6 +9,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -112,6 +113,12 @@ public class ArgentExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ProblemDetail illegalState(IllegalStateException exception) {
         return problem(HttpStatus.CONFLICT, CONFLICT_TITLE, exception.getMessage());
+    }
+
+    /** Устаревшая версия записи ({@code @Version}): её успел изменить другой пользователь. */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail optimisticLock(OptimisticLockingFailureException exception) {
+        return problem(HttpStatus.CONFLICT, CONFLICT_TITLE, "Запись изменена другим пользователем, обновите данные");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -10,13 +10,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 
-/**
- * Отвечает 401 в формате ProblemDetail, когда запрос без токена или с недействительным токеном
- * обращается к защищённому пути.
- *
- * <p>Причина отказа клиенту не раскрывается: истёкший, поддельный и отозванный токен
- * дают одинаковый ответ.</p>
- */
+/** 401 ProblemDetail без раскрытия причины: истёкший, поддельный и отозванный токен дают одинаковый ответ. */
 public class ProblemDetailAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private final ProblemDetailResponseWriter writer;

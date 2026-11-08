@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -84,6 +85,14 @@ class ArgentExceptionHandlerTest {
     }
 
     @Test
+    void shouldMapOptimisticLockTo409() throws Exception {
+        mvc.perform(get("/stale"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Конфликт данных"))
+                .andExpect(jsonPath("$.detail").value("Запись изменена другим пользователем, обновите данные"));
+    }
+
+    @Test
     void shouldMapConflict() throws Exception {
         mvc.perform(get("/state")).andExpect(status().isConflict());
         mvc.perform(get("/integrity"))
@@ -139,6 +148,11 @@ class ArgentExceptionHandlerTest {
         @GetMapping("/integrity")
         String integrity() {
             throw new DataIntegrityViolationException("SQL: insert into secret_table");
+        }
+
+        @GetMapping("/stale")
+        String stale() {
+            throw new ObjectOptimisticLockingFailureException(Object.class, 1L);
         }
 
         @GetMapping("/boom")

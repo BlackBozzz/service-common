@@ -8,18 +8,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Включает аудит изменений сущности: вставка, удаление и изменение каждого поля пишутся в
- * {@code common_audit_entry}. Сущности без аннотации не аудируются.
- *
- * <pre>{@code
- * @Entity
- * @Audited
- * @Table(name = "orders")
- * public class Order { ... }
- * }</pre>
- *
- * <p>Тип сущности в журнале — имя таблицы из {@code @Table(name)}; по нему же проверяется право
- * чтения журнала ({@code table:<имя>:read}).</p>
+ * Включает аудит сущности: вставка, удаление и изменение каждого поля пишутся в {@code common_audit_entry}.
+ * Тип в журнале — имя таблицы из {@code @Table(name)}; по нему же проверяется право чтения журнала.
  */
 @Documented
 @Inherited

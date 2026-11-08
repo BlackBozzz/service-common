@@ -14,12 +14,8 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import java.util.function.Supplier;
 
 /**
- * Правило доступа к справочникам по URL {@code /api/argent-dictionary/{code}/**}.
- *
- * <p>Код справочника берётся из переменной пути {@code code}. Запросы {@code GET} и {@code HEAD}
- * требуют гранта {@code read} на таблицу справочника, остальные методы — гранта {@code write};
- * гранты на {@code *} учитываются. {@code write} не подразумевает {@code read}.
- * Анонимный или неаутентифицированный запрос и запрос без переменной {@code code} отклоняются.</p>
+ * Правило доступа к {@code /api/argent-dictionary/{code}/**}: {@code GET}/{@code HEAD} — грант {@code read}
+ * таблицы, остальные методы — {@code write} (с учётом {@code *}); аноним и путь без {@code code} отклоняются.
  */
 public class DictionaryAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext> {
 

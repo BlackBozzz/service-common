@@ -1,1212 +1,250 @@
 # service-common
 
-Общая библиотека Spring Boot (4.1, Java 21) для бэкендов Argent. Подключается одной
-зависимостью и через автоконфигурацию даёт:
+Библиотека Spring Boot 4.1 для бэкендов Argent: вход по JWT, роли-гранты, админка пользователей,
+справочники из JPA-сущностей, аудит, вложения, статусы, нумерация, импорт и экспорт. Подключается
+одной зависимостью, всё включается автоконфигурацией. Полное описание — [docs/reference.md](docs/reference.md).
 
-| Блок | Что это |
-|---|---|
-| Аутентификация | вход по логину (и паролю), JWT RS256, сессии в БД, выход, регистрация, bootstrap-администратор |
-| Права | роли хранятся в БД как JSON-гранты по таблицам и действиям, системная роль `ADMIN`, запрет по умолчанию |
-| Администрирование | REST для пользователей, ролей и каталога подсказок для редактора грантов |
-| Справочники | JPA-сущности с `@ArgentDictionary` получают таблицы и REST; доступ проверяется правилом по URL |
-| Ошибки | единый формат `ProblemDetail` с `errors[{field, message}]` |
-| Миграции | собственные таблицы библиотеки в отдельной истории Flyway `common_schema_history` |
-| Импорт | загрузка листов XLSX/CSV в справочники (REPLACE/UPSERT) с отчётом по строкам; `TableReader` для своего кода |
-| Экспорт | выгрузка справочника или произвольной таблицы в XLSX, CSV, DOCX |
-| Статусы | справочники типов, статусов и переходов; проверка перехода `StatusTransitionService` |
-| Нумерация | счётчики номеров документов с шаблоном и периодом сброса, `NumberGenerator` |
-| Аудит | журнал изменений сущностей с `@Audited`, REST `GET /api/audit` |
-| OpenAPI | springdoc, Swagger UI по `/swagger-ui.html` |
+Нужно: Java 21, PostgreSQL 15+ (тесты — 17), Maven; Docker — только для тестов библиотеки.
 
-## Подключение
+## Шаг 1. Зависимость
 
-Сначала установить библиотеку в локальный Maven-репозиторий:
+Сначала jar библиотеки в `~/.m2`: `cd service-common && ./mvnw -q install -DskipTests`.
 
-```bash
-cd service-common
-./mvnw install                 # с тестами (нужен Docker)
-./mvnw install -DskipTests     # без тестов
-```
-
-Затем в `pom.xml` приложения:
+Минимальный `pom.xml` приложения целиком (плюс класс `@SpringBootApplication` с `main`):
 
 ```xml
-<dependency>
-    <groupId>com.argent</groupId>
-    <artifactId>service-common</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-</dependency>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent><groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId><version>4.1.2</version></parent>
+    <groupId>com.example</groupId><artifactId>backend</artifactId><version>0.0.1</version>
+    <properties><java.version>21</java.version></properties>
+    <dependencies>
+        <dependency><groupId>com.argent</groupId><artifactId>service-common</artifactId>
+            <version>0.0.1-SNAPSHOT</version></dependency>
+        <dependency><groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId></dependency>
+        <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId>
+            <scope>runtime</scope></dependency>
+    </dependencies>
+    <build><plugins><plugin><groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+</project>
 ```
 
-Библиотека рассчитана на PostgreSQL. Spring MVC, Spring Security, OAuth2 Resource Server,
-Flyway, JPA, Validation и springdoc приходят транзитивно.
+Security, JPA, Flyway, Validation, springdoc, POI и commons-csv приходят транзитивно; Lombok — нет.
 
-### Зависимости и сборка
+Проверка: `mvn -q compile` (или `./mvnw`) завершается без ошибок.
 
-Для импорта и экспорта библиотека тянет транзитивно Apache POI (`poi-ooxml` 5.5.1 — XLSX и
-DOCX) и Apache Commons CSV 1.14.1. Отдельно подключать их в приложении не нужно.
+## Шаг 2. `application.properties`
 
-Если на площадке не будет интернета, заранее прогрейте локальный репозиторий `~/.m2`: соберите
-и установите библиотеку (`./mvnw install -DskipTests`) и один раз соберите каждое приложение,
-которое её подключает, — тогда все зависимости, включая POI и commons-csv, окажутся в `~/.m2`.
-
-Версия библиотеки не меняется (`0.0.1-SNAPSHOT`): `install` новой сборки заменяет в `~/.m2`
-предыдущую.
-
-## Обязательные настройки приложения
-
-### Flyway — ломающее изменение
-
-Миграции библиотеки (`classpath:db/migration/common`) больше **не** подключаются через
-`spring.flyway.locations`. Библиотека применяет их сама, в отдельную таблицу истории
-`common_schema_history`, и только потом запускает Flyway приложения.
+Блок копируется целиком; замените схему `app` и учётные данные БД на свои.
 
 ```properties
-# было
-spring.flyway.locations=classpath:db/migration/common,classpath:db/migration/app
-# стало
+spring.datasource.url=jdbc:postgresql://localhost:5432/postgres?currentSchema=app
+spring.datasource.username=postgres
+spring.datasource.password=postgres
+spring.jpa.open-in-view=false
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.properties.hibernate.default_schema=app
+# Миграции библиотеки (db/migration/common) она применяет сама; сюда — только свои
 spring.flyway.locations=classpath:db/migration/app
-```
-
-- В `spring.flyway.locations` не должно быть `db/migration/common`. Рекомендуется указывать
-  только `classpath:db/migration/app`, а не родительский каталог `classpath:db/migration`:
-  Flyway может подхватить из подкаталогов миграции библиотеки в историю приложения.
-- Источник данных, `spring.flyway.schemas` и `spring.flyway.default-schema` миграции
-  библиотеки берут из настроек Flyway приложения.
-- Baseline для Flyway приложения включает библиотека (`baselineOnMigrate=true`,
-  `baselineVersion=0`): к моменту миграций приложения схема уже не пуста. Поэтому в истории
-  приложения появляется запись baseline с версией 0, а миграции приложения начинаются с `V1`.
-- **Существующая БД**, мигрированная по старой схеме (миграции библиотеки записаны в
-  `flyway_schema_history` приложения), так не запустится. Пересоздайте схему или удалите из
-  `flyway_schema_history` строки с версиями библиотеки.
-
-Таблицы библиотеки: `common_dictionaries` (V1), `common_user`, `common_user_session` (V2),
-`common_role` (с колонкой `grants jsonb`) и `common_user_role` (V3), `common_status_type`,
-`common_status`, `common_status_transition`, `common_sequence` и `common_audit_entry` (V4).
-
-> Если приложение объявит свой бин `FlywayMigrationStrategy`, стратегия библиотеки
-> отключится и её миграции **не выполнятся** — их придётся запускать самостоятельно
-> (каталог `classpath:db/migration/common`, таблица `common_schema_history`).
-
-### Пароль bootstrap-администратора
-
-При запуске библиотека создаёт администратора `argent.auth.bootstrap-admin.login` (по
-умолчанию `admin`) и назначает ему роль `ADMIN`. В парольном режиме (по умолчанию) пароль
-обязателен: если администратора ещё нет, а `argent.auth.bootstrap-admin.password` пуст,
-запуск прерывается с ошибкой `Задайте argent.auth.bootstrap-admin.password`.
-
-```properties
+spring.flyway.default-schema=app
+spring.flyway.schemas=app
+# Пароль admin из переменной окружения; двоеточие обязательно
 argent.auth.bootstrap-admin.password=${ARGENT_ADMIN_PASSWORD:}
-```
-
-Двоеточие в `${…:}` обязательно: без значения по умолчанию Spring не запустится из-за
-неразрешённого плейсхолдера, и вместо понятного сообщения библиотеки будет ошибка конфигурации.
-
-Пароль существующего администратора при перезапуске не меняется. Если администратор уже
-существует без пароля, а парольный режим включён, в журнал пишется WARN — пароль нужно
-задать через `POST /api/users/{id}/password`.
-
-### Ключ JWT
-
-Токены подписываются RSA-ключом из `argent.auth.jwt.key-file`
-(по умолчанию `./config/argent-jwt.pem`, путь относительно рабочего каталога процесса).
-
-- Если файла нет, при первом запуске создаётся ключ RSA-2048 и сохраняется в PEM PKCS#8.
-- На файловых системах с POSIX-правами файл создаётся с правами `rw-------`, недостающие
-  каталоги — с `rwx------`. Если существующий файл читают группа или остальные пользователи,
-  в журнал пишется WARN. На Windows действуют права по умолчанию.
-- Если сохранить новый ключ не удалось, пишется WARN и ключ живёт только в памяти: после
-  перезапуска все выданные токены станут недействительны.
-- Закрытый ключ не должен попасть в репозиторий — добавьте в `.gitignore` приложения:
-
-```gitignore
-/config/argent-jwt.pem
-```
-
-Все экземпляры приложения должны использовать один и тот же файл ключа, иначе токен,
-выданный одним экземпляром, не примет другой.
-
-### Размер загружаемых файлов — обязательно для импорта
-
-Spring по умолчанию ограничивает multipart-загрузку **1 МБ** на файл и запрос, и это ограничение
-срабатывает раньше лимита библиотеки `argent.transfer.max-upload-bytes` (20 МБ). Без настройки
-импорт файла больше 1 МБ не дойдёт до библиотеки. Поднимите лимиты Spring не ниже
-`max-upload-bytes` (запрос чуть больше файла — в нём есть и другие части формы):
-
-```properties
+# Лимит Spring по умолчанию 1 МБ — поднять до лимитов импорта и вложений (20 МБ)
 spring.servlet.multipart.max-file-size=20MB
 spring.servlet.multipart.max-request-size=21MB
+# Папка файлов вложений (создаётся при запуске)
+argent.attachments.root=./data/attachments
 ```
 
-Превышение любого из лимитов отвечает 400 «Некорректный запрос» с `detail`
-`Файл превышает допустимый размер`. Обработчик `ImportExceptionHandler` глобальный: так
-отвечают **все** multipart-эндпоинты приложения при `MaxUploadSizeExceededException`
-(вместо стандартного 413).
+В `.gitignore` приложения: `/config/argent-jwt.pem` (ключ JWT создаётся при первом запуске) и `/data/`.
 
-## Что меняется для существующих приложений
+```bash
+ARGENT_ADMIN_PASSWORD=secret123 mvn spring-boot:run
+```
 
-Этап 2 обратно совместим с этапом 1, но после обновления библиотеки:
+Без пароля запуск прерывается с `Задайте argent.auth.bootstrap-admin.password`. Норма при запуске —
+WARN: Flyway `No migrations found` (нет своих миграций), Hibernate `HHH90000025: PostgreSQLDialect does not
+need to be specified` (от справочников библиотеки) и два WARN SpringDoc о включённых эндпоинтах документации.
+Другой порт — `server.port=9080` (и `target` в `proxy.conf.json` фронтенда); «Port 8080 was already in use» при пустом
+netstat — диапазон Hyper-V (`netsh int ipv4 show excludedportrange protocol=tcp`). Подробно: [Подключение и свойства](docs/reference.md#1-подключение-и-свойства), [Вход и сессии](docs/reference.md#2-вход-и-сессии).
 
-- **Миграция V4** применяется автоматически при первом запуске (история
-  `common_schema_history`) и создаёт таблицы `common_status_type`, `common_status`,
-  `common_status_transition`, `common_sequence`, `common_audit_entry`. Если в схеме приложения уже
-  есть таблицы с такими именами, миграция упадёт — переименуйте свои таблицы.
-- **В каталоге справочников появляются 4 библиотечных справочника**: `common_status_type`
-  («Типы статусов»), `common_status` («Статусы»), `common_status_transition` («Переходы
-  статусов»), `common_sequence` («Счётчики номеров»). Их регистрирует миграция V4 (строки в
-  `common_dictionaries`). Они видны в `GET /api/argent-dictionary` и в каталоге подсказок
-  `GET /api/grants/catalog`. Доступ к ним — обычные гранты на таблицы: роль с
-  `"*": ["read", "write"]` может править статусы, переходы и счётчики. Если это не нужно,
-  выдавайте `write` по конкретным таблицам. Журнал аудита справочником не является.
-- **Новые REST**: `/api/import/dictionaries`, `/api/export`, `/api/status`, `/api/audit`.
-  Для импорта нужно новое действие `import` — добавьте его в роли (`argent-roles.json`) и в
-  `argent.security.actions`, чтобы оно появилось в подсказках редактора ролей.
-- **Свой `@EntityScan` / `@EnableJpaRepositories`.** Статусы, нумерация и аудит включаются,
-  только если в контексте есть их JPA-репозитории. По умолчанию библиотека регистрирует свои
-  пакеты сама; приложение, которое явно перечисляет пакеты сущностей и репозиториев, должно
-  добавить `com.argent.servicecommon.status`, `com.argent.servicecommon.sequence`,
-  `com.argent.servicecommon.audit` (например, `basePackageClasses = {CommonStatus.class,
-  CommonSequence.class, AuditEntry.class}` и `{CommonStatusRepository.class,
-  CommonSequenceRepository.class, AuditEntryRepository.class}`), иначе бины
-  `StatusTransitionService`, `NumberGenerator` и аудит не создаются.
-- **Контексты с `argent.security.enabled=false`.** Библиотека не включает method security
-  (`@EnableMethodSecurity`) и не создаёт бин `argentAccess`, поэтому новые REST не проверяют ни
-  действие `import`, ни гранты на таблицы (см. предупреждение в «`argent.security.enabled=false`»).
-  Если приложение в таком контексте само включит method security, выражения
-  `@argentAccess…` в аннотациях библиотеки не найдут бин. Пользователь без токена
-  библиотеки не имеет грантов и действий: многолистовой импорт отклоняет каждый лист
-  («Нет права записи в справочник»), переход статуса с `requiredAction` отклоняется (403), в
-  журнале аудита автор пустой.
-- В контексте появляется бин `Clock` (системные часы) — только если есть
-  `CommonSequenceRepository` (нумерация включена) и приложение не объявило свой бин `Clock`.
+Проверка: в логе `Создан администратор admin`; `curl localhost:8080/api/auth/config` →
+`{"passwordRequired":true,"registrationEnabled":false}`.
 
-## Свойства
+## Шаг 3. Роли и пользователи
 
-### `argent.auth.*`
+Права — гранты: `tables` (`read`/`write` по имени таблицы или `*`; `write` не включает `read`) и `actions`. Роль
+`ADMIN` создаёт библиотека, свои — файл `src/main/resources/argent-roles.json` (создаются при запуске, если их нет):
 
-| Свойство | По умолчанию | Описание |
-|---|---|---|
-| `argent.auth.password-required` | `true` | требуется ли пароль при входе; `false` — вход только по логину |
-| `argent.auth.registration.enabled` | `false` | разрешена ли самостоятельная регистрация через `POST /api/auth/register` |
-| `argent.auth.registration.default-roles` | пусто | коды ролей, назначаемых новому пользователю при регистрации; роли должны существовать, иначе регистрация отвечает 409 `Роль по умолчанию не найдена: <код>` |
-| `argent.auth.bootstrap-admin.login` | `admin` | логин администратора, создаваемого при запуске |
-| `argent.auth.bootstrap-admin.password` | пусто | его пароль; обязателен в парольном режиме, пока администратор не создан |
-| `argent.auth.session-ttl` | `30d` | срок действия сессии и выданного для неё токена |
-| `argent.auth.jwt.key-file` | `./config/argent-jwt.pem` | путь к закрытому RSA-ключу (PEM PKCS#8); создаётся, если файла нет |
-| `argent.auth.roles-file` | `classpath:argent-roles.json` | ресурс со стартовыми ролями приложения (префиксы `classpath:`, `file:`); необязателен — если ресурса нет, роли не загружаются |
-| `argent.auth.roles-file-mode` | `create` | режим загрузки ролей из файла: `create` или `overwrite` (см. «Стартовые роли») |
-
-### `argent.transfer.*`
-
-| Свойство | По умолчанию | Описание |
-|---|---|---|
-| `argent.transfer.max-upload-bytes` | `20971520` (20 МБ) | наибольший размер загружаемого файла импорта в байтах; больше — 400 `Файл превышает допустимый размер`; распакованный XLSX (сумма элементов ZIP и каждый элемент) — не больше `× 8`, но не меньше 10 МБ. Не более `536870911` (распакованный XLSX ограничен 4 ГБ), иначе запуск прерывается. Лимиты multipart Spring поднимаются отдельно (см. «Размер загружаемых файлов») |
-| `argent.transfer.max-rows` | `100000` | наибольшее число строк данных на лист импорта (больше — `Лист превышает допустимое число строк`) и наибольшее число строк экспорта |
-| `argent.transfer.import-on-error` | `fail-all` | стратегия ошибочных строк импорта: `fail-all` — лист импортируется целиком или не импортируется вовсе; `skip-row` — ошибочные строки пропускаются (см. «Стратегии ошибок») |
-| `argent.transfer.export-max-columns` | `1000` | наибольшее число колонок экспорта; больше — 400 `Слишком много колонок: <n>, допустимо не более <лимит>` |
-| `argent.transfer.export-max-cells` | `2000000` | наибольшее число ячеек экспорта (строки × колонки); больше — 400 `Слишком много ячеек: <n>, допустимо не более <лимит>` |
-
-Все лимиты должны быть больше нуля, иначе запуск прерывается.
-
-### `argent.security.*`
-
-| Свойство | По умолчанию | Описание |
-|---|---|---|
-| `argent.security.enabled` | `true` | `false` отключает весь блок безопасности: JWT, цепочку фильтров, правило доступа к справочникам, вход, стартовые роли, администрирование |
-| `argent.security.permit-paths` | пусто | дополнительные шаблоны путей, доступные без входа |
-| `argent.security.cors.allowed-origins` | пусто | разрешённые источники CORS для `/api/**`; пустой список — CORS не настраивается |
-| `argent.security.actions` | пусто | коды действий приложения для каталога подсказок `GET /api/grants/catalog`; действие `admin` добавляется всегда. На проверку прав не влияет |
-
-Пути, открытые без входа всегда (дополняются `permit-paths`):
-`/api/auth/login`, `/api/auth/register`, `/api/auth/config`, `/v3/api-docs/**`,
-`/swagger-ui/**`, `/swagger-ui.html`, `/actuator/health`. Всё остальное требует токен
-(справочники — ещё и грант, см. «Справочники»). HTTP-сессии не создаются, CSRF отключён.
-
-При заданных `cors.allowed-origins` разрешены методы `GET, POST, PUT, PATCH, DELETE, OPTIONS`
-и любые заголовки.
-
-> `permit-paths` проверяются раньше правила справочников. Шаблон вроде `/api/**` или
-> `/api/argent-dictionary/**` откроет справочники без входа и без грантов. Если метод с
-> `@PreAuthorize` попадает под `permit-paths`, анонимный запрос к нему получит 403, а не 401.
-
-### `argent.security.enabled=false`
-
-Для контекстов, где нужны только справочники (например, интеграционные тесты справочников
-или контекст без JPA-репозиториев пользователей и ролей), безопасность выключается:
+```json
+[ { "code": "MANAGER", "name": "Менеджер",
+    "grants": { "tables": { "*": ["read"], "orders": ["read", "write"] },
+                "actions": ["orders.approve", "import"] } },
+  { "code": "VIEWER", "name": "Наблюдатель", "grants": { "tables": { "*": ["read"] } } } ]
+```
 
 ```properties
-argent.security.enabled=false
+# Коды действий для подсказок редактора ролей (на проверку прав не влияют)
+argent.security.actions=orders.approve,import
 ```
 
-> **Внимание:** библиотека в этом режиме не создаёт цепочку фильтров, правило доступа к
-> справочникам, бин `argentAccess`, вход, стартовые роли, bootstrap-администратора и REST
-> администрирования. **Доступ к справочникам по грантам не проверяется.** Не используйте
-> этот режим в рабочей среде.
+Ошибка в файле прерывает запуск. Пользователи заводятся под `admin`: `POST /api/users`
+(`{login, displayName, password}`; пароль 6–72 символа или позже `POST /api/users/{id}/password`), затем
+`PUT /api/users/{id}/roles` (пример ниже). Правила — [Гранты и роли](docs/reference.md#3-гранты-и-роли).
 
-Флаг предназначен для тестов и контекстов только со справочниками. `spring-boot-starter-security`
-при этом остаётся в classpath, поэтому в веб-приложении срабатывает стандартная автоконфигурация
-безопасности Spring Boot: цепочка по умолчанию требует входа на каждый запрос и включает
-HTTP Basic и форму входа с паролем, сгенерированным и выведенным в журнал при запуске.
-Веб-приложение, которому действительно не нужна безопасность, должно дополнительно исключить
-из автоконфигурации
-`org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration`
-и `org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration`
-или объявить собственный бин `SecurityFilterChain`.
-
-## Вход без пароля
-
-```properties
-argent.auth.password-required=false
+```bash
+H=localhost:8080   # другой порт — правка только здесь
+TOKEN=$(curl -s $H/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"login":"admin","password":"secret123"}' | sed 's/.*"token":"\([^"]*\)".*/\1/')
+curl -s $H/api/auth/me -H "Authorization: Bearer $TOKEN"
+# id нового пользователя — поле $.id ответа POST /api/users
+ID=$(curl -s $H/api/users -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"login":"ivanov","displayName":"Ivanov","password":"secret123"}' | sed 's/^{"id":"\([^"]*\)".*/\1/')
+curl -s -X PUT $H/api/users/$ID/roles -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"roleCodes":["MANAGER"]}'
 ```
 
-Вход выполняется только по логину (пароль в запросе не проверяется), при каждом запуске в
-журнал пишется WARN `Вход без пароля включён (argent.auth.password-required=false)`. Пароль
-bootstrap-администратора в этом режиме не обязателен. Режим предназначен для демо и стендов,
-где пользователи импортируются из внешнего источника. `GET /api/auth/config` сообщает
-клиенту `passwordRequired`, чтобы форма входа могла скрыть поле пароля.
+Проверка: в логе `Создана роль MANAGER из файла ролей classpath:argent-roles.json`; `/api/auth/me` →
+`{"id":…,"login":"admin",…,"grants":{"tables":{"*":["read","write"]},"actions":["admin"]}}`.
 
-## Модель доступа
+## Шаг 4. Своя сущность
 
-- **Роль — JSON-документ с грантами**: `{code, name, description, system, grants}`. Роли
-  хранятся в `common_role` и правятся через `/api/roles` без пересборки приложения.
-- **Запрет по умолчанию**: у пользователя без ролей нет прав; роль только открывает доступ.
-- **Эффективные права** пользователя — объединение грантов всех его ролей. Они читаются из БД
-  при каждом запросе, поэтому изменение ролей и грантов действует сразу, без повторного входа.
-- **`ADMIN` — системная роль**, создаётся при запуске (см. «Стартовые роли»).
-
-### Формат грантов
-
-```json
-{
-  "tables": { "dict_country": ["read"], "documents": ["read", "write"], "*": ["read"] },
-  "actions": ["documents.approve"]
-}
-```
-
-| Раздел | Ключи и значения |
-|---|---|
-| `tables` | ключ — имя таблицы `[a-z_][a-z0-9_]{0,62}` или `*` (любая таблица); значение — непустой массив из `read`, `write` (строчными) |
-| `actions` | массив кодов действий `[a-z0-9_]+(\.[a-z0-9_-]+)*`, например `documents.approve` |
-
-- **`write` не включает `read`**: чтобы и читать, и изменять, перечислите обе операции.
-- Право на таблицу `t` и операцию `op` есть, если `tables["t"]` или `tables["*"]` содержит `op`.
-- Встроенное действие **`admin`** даёт доступ к администрированию пользователей и ролей.
-  Действие `admin` проходит любую проверку `@argentAccess.action(...)` и позволяет выдавать любые действия.
-- `{}`, отсутствующие разделы и `null` — роль без прав.
-- Разбор строгий. Ошибки возвращаются как 400 «Ошибка валидации» с `errors` (на каждое поле —
-  первая найденная ошибка):
-
-| Поле `errors[].field` | Сообщение | Когда |
-|---|---|---|
-| `grants` | `Неизвестное поле грантов: <ключ>` | ключ верхнего уровня, кроме `tables` и `actions` |
-| `grants` | `Недопустимый формат грантов` | не JSON-объект |
-| `grants.tables` | `Недопустимый формат грантов` | `tables` не объект или значение таблицы не массив |
-| `grants.tables` | `Недопустимое имя таблицы: <имя>` | имя не `*` и не соответствует `[a-z_][a-z0-9_]{0,62}` |
-| `grants.tables` | `Пустой набор операций для таблицы: <имя>` | `[]` |
-| `grants.tables` | `Недопустимая операция: <значение>` | не `read` и не `write` |
-| `grants.actions` | `Недопустимый формат грантов` | `actions` не массив |
-| `grants.actions` | `Недопустимый код действия: <значение>` | не строка или не соответствует шаблону |
-
-### Authorities
-
-Конвертер токена превращает эффективные гранты в authorities Spring Security:
-
-| Грант | Authority |
-|---|---|
-| `"documents": ["read", "write"]` | `table:documents:read`, `table:documents:write` |
-| `"*": ["read"]` | `table:*:read` (ключ `*` сохраняется буквально) |
-| `"actions": ["documents.approve"]` | `action:documents.approve` |
-
-Роль, гранты которой в БД не разбираются, пропускается с ERROR в журнале — вход пользователю
-это не ломает.
-
-### Проверка в контроллерах
-
-Бин `argentAccess` для SpEL учитывает `*`; проверять authorities через `hasAuthority` вручную
-не нужно:
+Сущность с `@ArgentDictionary` получает таблицу (код справочника = имя таблицы), REST и форму в
+админке. Таблицу создаёт библиотека при запуске. `Order.java` и `OrderDto.java` — отдельные файлы:
 
 ```java
-@RestController
-@RequestMapping("/api/documents")
-public class DocumentController {
+// Order.java
+import com.argent.servicecommon.audit.Audited;
+import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
+import jakarta.persistence.*;
+import java.math.BigDecimal;
 
-    @GetMapping
-    @PreAuthorize("@argentAccess.table('documents', 'read')")
-    public List<DocumentDto> list() { ... }
-
-    @PostMapping
-    @PreAuthorize("@argentAccess.table('documents', 'write')")
-    public DocumentDto create(@Valid @RequestBody DocumentDto dto) { ... }
-
-    @PostMapping("/{id}/approve")
-    @PreAuthorize("@argentAccess.action('documents.approve')")
-    public void approve(@PathVariable UUID id) { ... }
+@Entity @Audited @Table(name = "orders")
+@ArgentDictionary(name = "Заказы", dtoClass = OrderDto.class)
+public class Order {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+    private String number;                  // номер заказа — бизнес-поле
+    @Column(nullable = false) private String customer;
+    private BigDecimal total;
+    @Version private Long version;          // оптимистическая блокировка
 }
+
+// OrderDto.java
+import com.argent.servicecommon.dictionary.annotation.DictionaryField;
+import jakarta.validation.constraints.NotBlank;
+import java.math.BigDecimal;
+
+public record OrderDto(                     // order — порядок колонок, задавайте всем полям
+        @DictionaryField(label = "ID", readOnly = true, order = 1) Long id,
+        @DictionaryField(label = "Номер", order = 2) String number,
+        @DictionaryField(label = "Заказчик", order = 3) @NotBlank String customer,
+        @DictionaryField(label = "Сумма", order = 4) BigDecimal total,
+        @DictionaryField(label = "Версия", readOnly = true, order = 5) Long version) { }
 ```
 
-| Метод | Что проверяет |
-|---|---|
-| `@argentAccess.action(code)` | есть ли действие `code` (держателю `admin` — всегда да) |
-| `@argentAccess.table(table, op)` | разрешена ли операция `op` (`read`/`write` без учёта регистра; иное — `false`) над таблицей с учётом `*` |
+`@Audited` — библиотечный, не `org.hibernate.envers.Audited`. Имена компонентов DTO = имена полей сущности;
+геттеры и сеттеры библиотеке не нужны (своему коду добавьте сами).
 
-`@PreAuthorize` можно повесить и на класс. Метод без `@PreAuthorize` доступен **любому
-вошедшему** пользователю — библиотека такие методы не ищет, следите за аннотациями сами.
-Отказ — 403 «Недостаточно прав».
+Доступ к `/api/argent-dictionary/orders/**`: `GET` — `read`, остальное — `write`. Свои контроллеры: `@PreAuthorize(
+"@argentAccess.table('orders', 'write')")` или `@argentAccess.action('orders.approve')` (без него — любому вошедшему).
 
-Коды действий приложения стоит перечислить в `argent.security.actions`, чтобы они появились в
-подсказках редактора ролей:
+`readOnly`-версию REST справочника не сверяет — это делает свой код (`DemoOrderService.changeStatus` в
+`main-backend`); устаревший `@Version` при сохранении — 409. [Справочники](docs/reference.md#4-справочники).
 
-```properties
-argent.security.actions=documents.approve,documents.export
+Проверка: `GET /api/argent-dictionary` содержит `orders`; после `POST /api/argent-dictionary/orders/records` с `{"number":"2026-001","customer":"ООО Ромашка","total":100}` (201)
+`GET /api/argent-dictionary/orders/records` → `{"items":[{"id":1,…}],"page":0,…,"totalElements":1,…}`;
+в админке записи — на странице `/admin/dictionaries/<код>` (здесь `/admin/dictionaries/orders`).
+Кириллица в `curl -d` из Git Bash на Windows уходит не в UTF-8 (в БД `���`): кладите JSON в файл, `--data-binary @order.json`.
+
+## Шаг 5. Аудит
+
+`@Audited` на сущности (шаг 4) пишет `INSERT`/`UPDATE` (по полю)/`DELETE` в `common_audit_entry`;
+`@AuditIgnore` на поле заменяет значения на `***`. Читать журнал записи:
+
+```bash
+curl -s "$H/api/audit?entityType=orders&entityId=1" -H "Authorization: Bearer $TOKEN"
 ```
 
-В сервисах те же проверки доступны статически через `CurrentUser`:
+Нужен `read` на таблицу или действие `admin`; без `entityType` — только `admin` (остальным 400 «Укажите
+entityType»). Изменения вне Spring-транзакции и через свой `EntityManagerFactory` — [Аудит](docs/reference.md#9-аудит).
 
-| Метод | Результат |
-|---|---|
-| `CurrentUser.id()` | `Optional<UUID>` вошедшего пользователя |
-| `CurrentUser.sessionId()` | `Optional<UUID>` сессии из токена |
-| `CurrentUser.authorities()` | `Set<String>` authorities (`table:…`, `action:…`) |
-| `CurrentUser.canTable(table, op)` | как `@argentAccess.table` |
-| `CurrentUser.hasAction(code)` | как `@argentAccess.action` |
+Проверка: ответ содержит `"action":"INSERT"` с `"actorLogin":"admin"` для созданного заказа.
 
-Для анонимного запроса проверки возвращают `false`, а `id()` — пустое значение.
+## Шаг 6. По необходимости
 
-### Стартовые роли
+### Вложения
 
-**`ADMIN`** создаёт библиотека: `system=true`, гранты
-`{"tables":{"*":["read","write"]},"actions":["admin"]}`. При каждом запуске роль выравнивается:
-признак `system` и гранты приводятся к этому значению (имя и описание существующей роли не
-меняются). Bootstrap-администратор получает `ADMIN`.
+Файлы к записи любой таблицы; права таблицы-владельца: список и скачивание — `read` (без него 404), загрузка
+и удаление — `write`. HTML, SVG, `*+xml`, JavaScript и исполняемые файлы не принимаются; тип определяется
+по сигнатуре (PDF/PNG/JPEG/GIF/ZIP/EXE/ELF) или по расширению.
 
-**Роли приложения** задаются файлом `argent.auth.roles-file` (по умолчанию
-`classpath:argent-roles.json`, то есть `src/main/resources/argent-roles.json`). Файл
-необязателен: если его нет, в журнал пишется INFO `Файл ролей не найден: …`.
-
-```json
-[
-  {
-    "code": "READER",
-    "name": "Читатель",
-    "description": "Видит все справочники",
-    "grants": { "tables": { "*": ["read"] } }
-  },
-  {
-    "code": "EDITOR",
-    "name": "Редактор",
-    "grants": { "tables": { "*": ["read", "write"] }, "actions": ["documents.approve"] }
-  }
-]
+```bash
+curl -s $H/api/attachments -H "Authorization: Bearer $TOKEN" \
+  -F entityType=orders -F entityId=1 -F file=@contract.pdf
 ```
 
-- Файл — JSON-массив объектов с полями `code` (обязательно, `[A-Z][A-Z0-9_]{0,49}`),
-  `name` (обязательно, до 255 символов), `description` (необязательно, строка до 1000
-  символов), `grants` (формат выше; без него — роль без прав).
-- **Схема закрытая**: любое другое поле (как и ошибка JSON, кода, имени, грантов или повтор кода)
-  **прерывает запуск** с `IllegalStateException` вида
-  `Ошибка в файле ролей classpath:argent-roles.json, роль EDITOR: неизвестное поле grant`.
-  Файл проверяется целиком до записи в БД; применяется одной транзакцией.
-- Поле `system` допускается, но игнорируется (WARN). Роль `ADMIN` в файле игнорируется (WARN):
-  её определяет библиотека.
-- Роли, которых нет в файле, не трогаются ни в одном режиме; роли из файла не удаляются.
+Удаляя запись своим кодом, удаляйте и файлы: `attachmentService.deleteAll("orders", id.toString())` в той же
+транзакции (REST справочника оставляет файлы-сироты). Лимиты и типы: [Вложения](docs/reference.md#10-вложения).
 
-| `argent.auth.roles-file-mode` | Поведение |
-|---|---|
-| `create` (по умолчанию) | создаются только роли, которых ещё нет по `code`; существующие не меняются — правки администратора в интерфейсе переживают перезапуск |
-| `overwrite` | дополнительно имя, описание и гранты существующих ролей приводятся к файлу (для стендов, где файл — источник истины) |
+Проверка: 201 с `{"id":…,"fileName":"contract.pdf","contentType":"application/pdf",…}`;
+в `/api/audit?entityType=orders` появилась строка `"action":"ATTACH"`.
 
-Файл ролей загружается раньше создания `ADMIN` и bootstrap-администратора. Роли из
-`argent.auth.registration.default-roles` удобно описывать в этом же файле.
+### Статусы
 
-### Справочники: правило по URL
-
-Доступ к справочникам проверяется в цепочке фильтров (`DictionaryAuthorizationManager`);
-модуль справочников о правах не знает. Код справочника — имя его таблицы, он же ключ в
-`grants.tables`.
-
-| Запрос | Требуется |
-|---|---|
-| `GET /api/argent-dictionary` | любой вошедший; в списке все справочники, фильтрует клиент |
-| `GET` и `HEAD` `/api/argent-dictionary/{code}/**` (`schema`, `form`, `records`, `options`) | `read` на таблицу `{code}` (или на `*`) |
-| любой другой метод `/api/argent-dictionary/{code}/**` (`POST`, `PUT`, `DELETE`, а также `OPTIONS`, `PATCH`) | `write` на таблицу `{code}` (или на `*`) |
-
-- `write` без `read` позволяет изменять записи, но не читать их.
-- `options` — тоже чтение: формы со ссылочными полями работают, только если у пользователя
-  есть `read` на связанные справочники. Выдавайте `read` на таблицы, на которые ссылаются.
-- Без токена — 401, без гранта — 403.
-- `permit-paths` шире этого правила: путь, открытый через `permit-paths`, доступен без проверки.
-- Предварительные CORS-запросы (`OPTIONS`) при заданных `cors.allowed-origins` обрабатывает
-  CORS-фильтр раньше этого правила; прочие `OPTIONS`-запросы считаются записью.
-
-### Каталог подсказок
-
-`GET /api/grants/catalog` (действие `admin`) отдаёт подсказки для редактора ролей:
-`{tables, actions}`, где `tables` — коды всех зарегистрированных справочников, `actions` —
-`argent.security.actions` плюс `admin`; оба списка по алфавиту без повторов. Каталог —
-только подсказка: гранты можно выдавать и на таблицы приложения, которых в нём нет.
-
-### Правила администрирования
-
-Администрирование доступно держателю действия `admin` (`@argentAccess.action('admin')` на
-контроллерах). Правила проверяются против эффективных прав **вызывающего** пользователя из
-текущего запроса.
-
-«Покрывается» означает: каждая операция над каждой таблицей разрешена вызывающему для этой
-таблицы или через `*` (запрошенный `*` требует `*` у вызывающего), и каждое действие есть у
-вызывающего. **Действие `admin` покрывает любые действия**: его держатель может выдавать
-действия приложения, не имея их сам; таблицы при этом проверяются как обычно.
-
-| Правило | Где | Ответ |
-|---|---|---|
-| **No-escalation**: создать роль можно, только если её гранты покрываются вашими | `PUT /api/roles/{code}` для новой роли | 403 `Нельзя выдать права, которых нет у вас` |
-| **No-escalation**: изменить роль можно, только если покрываются **добавленные** гранты | `PUT /api/roles/{code}` для существующей роли | 403 то же |
-| **No-escalation**: назначить роль можно, только если её гранты покрываются вашими (проверяются добавляемые роли) | `PUT /api/users/{id}/roles` | 403 `Нельзя выдать роль с правами, которых нет у вас: <код>` |
-| **Доминирование**: управлять пользователем можно, только если его эффективные права покрываются вашими; над собой — всегда | `PUT /api/users/{id}`, `PUT /api/users/{id}/roles`, `POST /api/users/{id}/password`, `POST /api/users/{id}/revoke-sessions` | 403 `Нельзя управлять пользователем с большими правами` |
-| Нельзя отключить самого себя | `PUT /api/users/{id}` | 409 `Нельзя отключить самого себя` |
-| Нельзя снять с себя действие `admin` (сменой своих ролей) | `PUT /api/users/{id}/roles` | 409 `Нельзя снять с себя действие администратора` |
-| **Последний админ**: нельзя оставить систему без активного пользователя с действием `admin` — отключением, снятием ролей или удалением `admin` из грантов роли | `PUT /api/users/{id}`, `PUT /api/users/{id}/roles`, `PUT /api/roles/{code}` | 409 `Нельзя оставить систему без активного администратора` |
-| **Системная роль** не удаляется | `DELETE /api/roles/{code}` | 409 `Системную роль нельзя удалить` |
-| **Системная роль** не сужается: её гранты при сохранении всегда приводятся к набору администратора (переданные гранты проверяются на формат и игнорируются), меняются только имя и описание | `PUT /api/roles/ADMIN` | 200 |
-| Роль, назначенная пользователям, не удаляется | `DELETE /api/roles/{code}` | 409 `Роль назначена пользователям` |
-
-Текст отказов по этим правилам передаётся клиенту в `detail`. Отказ `@PreAuthorize` (нет
-действия `admin`) — 403 с общим `detail` «Недостаточно прав для выполнения операции.».
-
-Смена пароля отзывает все сессии пользователя.
-
-**Известные ограничения:**
-
-- Изменение роли проверяет только добавленные гранты. Убирать гранты можно у любой роли, в том
-  числе у назначенной пользователям с правами шире ваших: редактирование роли может сузить
-  чужие права.
-- Действие `admin` покрывает любые действия, включая само `admin`. Поэтому любой держатель
-  `admin` может создать роль с `admin` (таблицы в ней — в пределах своих грантов) и назначить
-  её тем, кем управляет.
-- Вне аутентифицированного запроса (импорт, планировщик) у вызывающего нет прав: вызов
-  `UserAdminService`/`RoleAdminService` из кода, выдающий или затрагивающий права, получит
-  `GrantsAccessDeniedException` (см. «Импорт пользователей»).
-
-## Справочники
-
-JPA-сущность становится справочником с аннотацией `@ArgentDictionary`; код справочника —
-имя таблицы из `@Table` (формат `[a-z_][a-z0-9_]{0,62}`). При запуске библиотека создаёт
-таблицы новых справочников и регистрирует их в `common_dictionaries`.
+Типы, статусы и переходы — библиотечные справочники `common_status_type`, `common_status`,
+`common_status_transition` (заполняются в админке или миграцией, пример SQL — в
+[Статусы](docs/reference.md#7-статусы)). Поле статуса хранит сама сущность, библиотека только проверяет переход:
 
 ```java
-@Entity
-@Table(name = "ref_city")
-@ArgentDictionary(name = "Города", dtoClass = CityDto.class)
-public class City { ... }
-
-public record CityDto(
-        Long id,
-        @DictionaryField(label = "Название", order = 1) @NotBlank String name,
-        @DictionaryField(label = "Код", readOnly = true) String code
-) { }
+statuses.assertAllowed("ORDER_STATUS", order.getStatus(), "DONE");  // null — создание; 404/409/403
+order.setStatus("DONE");
 ```
 
-`@DictionaryField` (на поле или компоненте record DTO): `label`, `description`, `order`,
-`readOnly` (поле не переносится из DTO в сущность), `visible`. Ограничения значений — обычные
-аннотации Jakarta Validation.
+Проверка: после миграции из [Статусы](docs/reference.md#7-статусы) `GET /api/status/ORDER_STATUS/transitions`
+→ статусы, доступные при создании (`NEW`).
 
-Доступ к справочнику `ref_city` выдаётся грантом `"ref_city": ["read"]` или
-`"ref_city": ["read", "write"]` (см. «Справочники: правило по URL»).
+### Нумерация
 
-### REST справочников
-
-Все пути — под `/api/argent-dictionary`, требуют входа.
-
-| Метод и путь | Грант | Что делает |
-|---|---|---|
-| `GET /api/argent-dictionary` | — | все зарегистрированные справочники |
-| `GET /{code}/schema` | `read` | схема формы и выбора ссылок для фронтенда |
-| `GET /{code}/form` | `read` | описание полей DTO и ограничений |
-| `GET /{code}/records?page&size&sort&search&filter.<поле>` | `read` | страница записей (по умолчанию `page=0`, `size=20`) |
-| `GET /{code}/records/{id}` | `read` | одна запись |
-| `GET /{code}/options?page&size&search` | `read` | варианты выбора для полей-ссылок |
-| `POST /{code}/records` | `write` | создать запись из полного DTO, 201 |
-| `PUT /{code}/records/{id}` | `write` | полностью обновить запись |
-| `DELETE /{code}/records/{id}` | `write` | удалить запись, 204 |
-
-PATCH не поддерживается.
-
-## Импорт пользователей
-
-`UserProvisioningService.upsert(login, displayName)` создаёт активного пользователя без пароля
-и ролей или обновляет отображаемое имя существующего. Роли, пароль и активность существующего
-пользователя не меняются. Пробелы по краям логина отбрасываются.
-
-`UserAdminService.setRoles` применяет правила администрирования к текущему пользователю
-запроса. В импорте вне запроса (планировщик, `ApplicationRunner`) прав у вызывающего нет, и
-назначение роли с грантами будет отклонено. Назначайте роли напрямую через репозитории —
-правила администрирования при этом **не применяются**:
-
-```java
-import com.argent.servicecommon.auth.entity.User;
-import com.argent.servicecommon.auth.service.UserProvisioningService;
-import com.argent.servicecommon.security.entity.Role;
-import com.argent.servicecommon.security.entity.UserRole;
-import com.argent.servicecommon.security.entity.UserRoleId;
-import com.argent.servicecommon.security.repository.RoleRepository;
-import com.argent.servicecommon.security.repository.UserRoleRepository;
-
-@Service
-@RequiredArgsConstructor
-public class EmployeeImport {
-
-    private final UserProvisioningService provisioning;
-    private final RoleRepository roleRepository;
-    private final UserRoleRepository userRoleRepository;
-
-    @Transactional
-    public void importEmployee(String login, String fullName) {
-        User user = provisioning.upsert(login, fullName);
-        Role reader = roleRepository.findByCode("READER").orElseThrow();
-        UserRoleId link = new UserRoleId(user.getId(), reader.getId());
-        if (!userRoleRepository.existsById(link)) {
-            userRoleRepository.save(new UserRole(link));
-        }
-    }
-}
-```
-
-Пользователь без пароля входит только в безпарольном режиме; в парольном пароль задаёт
-администратор (`POST /api/users/{id}/password`).
-
-Пользователи — не справочник, `POST /api/import/dictionaries` их не загружает. Файл со списком
-сотрудников читается `TableReader`, а каждая строка передаётся в `UserProvisioningService`
-(см. «Ручной импорт через `TableReader`»).
-
-## Импорт справочников
-
-Лист XLSX или файл CSV загружается в зарегистрированный справочник через его DTO: значения
-проходят ту же Bean Validation и ту же запись, что и формы справочников.
-
-### REST импорта
-
-| Метод и путь | Доступ | Параметры (multipart) → ответ |
-|---|---|---|
-| `POST /api/import/dictionaries/{code}` | действие `import` **и** `write` на таблицу `{code}` | `file` — XLSX или CSV; `mode` — `REPLACE` или `UPSERT` (без учёта регистра); `sheet` — имя листа XLSX без учёта регистра и пробелов по краям (по умолчанию первый); `keyFields` — ключевые поля UPSERT через запятую; `mapping` — JSON `{"Заголовок": "поле"}` → `ImportReport` |
-| `POST /api/import/dictionaries` | действие `import` | `file` — только XLSX, `mode` → список `{sheet, dictionary, report}` по листам |
-
-- CSV определяется по расширению `.csv` или типу содержимого с `csv`, иначе файл читается как XLSX.
-- Отказ `@PreAuthorize` — 403; права на таблицы проверяются по тем же грантам, что и
-  справочники (`"ref_city": ["write"]` или `"*": ["write"]`).
-
-**Многолистовой импорт.** Каждый лист книги сопоставляется со справочником по коду или по
-названию справочника без учёта регистра (совпадение кода важнее). Листы обрабатываются по
-порядку, у каждого своя транзакция и свой отчёт; ошибка одного листа не останавливает
-остальные, и ответ — 200 со списком отчётов, даже если какие-то листы отменены. Колонки
-сопоставляются автоматически, ключи UPSERT — по умолчанию сущности. Лист без справочника
-получает отчёт с ошибкой `Справочник для листа не найден: <лист>`, лист справочника без права
-`write` — `Нет права записи в справочник`.
-
-### Сопоставление колонок
-
-Первая строка листа — заголовки. Без `mapping` колонка сопоставляется с полем DTO по подписи
-(`label` из `@DictionaryField`) или по имени поля — без учёта регистра, пробелов и
-подчёркиваний, `ё` = `е`; подпись важнее имени.
-
-С `mapping` автоматическое сопоставление **не** применяется: перечислите все заголовки.
-Значение `null` или `""` — колонка явно игнорируется.
-
-```json
-{"Наименование": "name", "Код ОКСМ": "code", "Комментарий": null}
-```
-
-- Заголовок, не сопоставленный ни с одним полем, — ошибка листа
-  `Колонка не сопоставлена с полем: <заголовок>` (в отчёте `row = 0`).
-- Колонки с пустым заголовком пропускаются, повторяющиеся заголовки получают суффикс ` (2)`, ` (3)`.
-- `mapping`, который не является JSON-объектом со строковыми значениями, — 400 «Ошибка
-  валидации» с `errors[{field: "mapping", message: "Некорректное сопоставление колонок"}]`.
-- Ошибки сопоставления — 400 «Некорректный запрос»: `Поле не найдено в справочнике: <поле>`,
-  `Поле сопоставлено с несколькими колонками: <поле>`.
-- Поля `readOnly` из листа не записываются. Идентификатор записывается только при создании и
-  только если он не генерируется.
-
-### Режимы
-
-| Режим | Что делает |
-|---|---|
-| `REPLACE` | удаляет **все** записи справочника и создаёт записи из листа |
-| `UPSERT` | ищет запись по ключевым полям: найдена — обновляет, нет — создаёт |
-
-**REPLACE:**
-
-- **Сначала проверяются все строки, потом удаляются старые записи.** Записи справочника
-  сохраняются и лист отменяется в трёх случаях:
-  - в листе нет строк данных — в отчёте `Лист не содержит данных` (при любой стратегии);
-  - при `fail-all` есть хоть одна ошибка строки или листа — отчёт содержит все ошибки, найденные
-    при проверке всех строк; дополнительной строки про REPLACE в нём нет;
-  - **только при `skip-row`**: есть ошибка листа (например, несопоставленная колонка) или нет ни
-    одной корректной строки — в отчёт добавляется
-    `REPLACE не выполнен: есть ошибки листа или нет корректных строк, записи справочника сохранены`.
-- Удаление — один `DELETE` по таблице в транзакции импорта, затем создаются корректные строки.
-  При `skip-row` ошибочные строки не создаются, а старые записи уже удалены.
-- Если на удаляемые записи ссылаются другие таблицы — 409
-  `На записи справочника ссылаются другие данные`, ничего не меняется.
-- **REPLACE недоступен для справочников с коллекциями** (`@ElementCollection`, `@OneToMany`,
-  `@ManyToMany`): 400 `REPLACE недоступен для справочника с коллекциями, используйте UPSERT`.
-- В журнал аудита пишется одна строка `REPLACE` с числом удалённых записей (см. «Аудит»).
-
-**UPSERT:**
-
-- Ключевые поля — `keyFields`, иначе ключ по умолчанию из сущности: первое поле с
-  `@Column(unique = true)` или `@JoinColumn(unique = true)`, иначе первое ограничение
-  `@Table(uniqueConstraints)` (имена колонок переводятся в поля). Если ключа нет — 400
-  `Укажите ключевые поля для режима UPSERT`. Ключ может быть составным.
-- Ключевое поле должно быть сопоставлено с колонкой (`Ключевое поле не сопоставлено с колонкой: <поле>`)
-  и быть простым значением или одиночной ссылкой (`Поле не может быть ключевым: <поле>`).
-- **Пустая ячейка и отсутствующая колонка означают «оставить как было»**: найденная запись
-  читается как DTO, непустые ячейки накладываются поверх, затем запись обновляется. Очистить
-  поле через UPSERT нельзя.
-- Ошибки строки: `Не заполнено ключевое поле`, `Найдено несколько записей с такими значениями ключевых полей`.
-
-### Преобразование значений
-
-Пустая ячейка — `null` (в UPSERT — «не менять»). Ячейки XLSX читаются по значению: числа без
-группировки, даты в ISO, формулы — по вычисленному результату.
-
-| Тип поля DTO | Допустимые значения |
-|---|---|
-| числа | `1234.5`, `1 234,50`, `1,234.50`, `1,5`; пробелы (в том числе неразрывные) удаляются; при точке и запятой десятичный разделитель — последний; одна запятая — десятичная, кроме целых полей с группами по три цифры (`1,234` = 1234) |
-| `Boolean` | `да`/`нет`, `true`/`false`, `1`/`0`, `yes`/`no`, `истина`/`ложь` |
-| `LocalDate` | `дд.мм.гггг` или ISO `гггг-мм-дд`; ISO дата-время (`гггг-мм-ддTчч:мм`, допускается пробел) — берётся дата |
-| `LocalDateTime` | `дд.мм.гггг чч:мм[:сс]`, `дд.мм.гггг`, ISO (`гггг-мм-ддTчч:мм`, пробел вместо `T` допускается) |
-| `LocalTime` | `чч:мм[:сс]` |
-| `Instant`, `OffsetDateTime`, `ZonedDateTime` | ISO с зоной; без зоны — как `LocalDateTime` в часовом поясе сервера |
-| `UUID` | стандартная запись |
-| enum | имя константы без учёта регистра |
-| ссылка на справочник | подпись записи (поле отображения целевого справочника) — точное совпадение без учёта регистра |
-
-Множественные ссылки, коллекции и вложенные объекты не импортируются
-(`Тип поля не поддерживается импортом`). Сообщения ошибок значения: `Некорректное число: …`,
-`Ожидается целое число: …`, `Число вне допустимого диапазона: …`,
-`Некорректное логическое значение: …, ожидается да/нет`,
-`Некорректная дата: …, ожидается дд.мм.гггг или гггг-мм-дд`,
-`Некорректные дата и время: …, ожидается дд.мм.гггг чч:мм или ISO`,
-`Некорректное время: …, ожидается чч:мм`, `Некорректный идентификатор: …`,
-`Неизвестное значение: …`, `Не найдена запись справочника <код>: <подпись>`,
-`Найдено несколько записей справочника <код>: <подпись>`. После преобразования DTO проверяется
-Bean Validation; её сообщения попадают в отчёт с именем поля.
-
-### Отчёт
-
-```json
-{
-  "total": 3, "created": 1, "updated": 1, "failed": 1,
-  "errors": [ { "row": 4, "field": "code", "message": "не должно быть пустым" } ]
-}
-```
-
-- `total` — число непустых строк данных; `row` — номер строки Excel (заголовок — строка 1; для
-  CSV — номер записи); `row = 0` и `field = null` — ошибка листа.
-- Отменённый лист (одиночный импорт) — **400** ProblemDetail с отчётом в свойстве `report`:
-
-```json
-{
-  "title": "Ошибка импорта",
-  "status": 400,
-  "detail": "Импорт отменён: в данных есть ошибки",
-  "report": { "total": 3, "created": 0, "updated": 0, "failed": 1, "errors": [ … ] }
-}
-```
-
-  У отменённого листа `created = updated = 0`, а `failed` — число ошибочных строк, поэтому
-  `total` не равен сумме счётчиков: не складывайте их на клиенте.
-
-### Стратегии ошибок
-
-`argent.transfer.import-on-error`:
-
-| Значение | Поведение |
-|---|---|
-| `fail-all` (по умолчанию) | лист — одна транзакция; после первой ошибки строки только проверяются, в конце лист отменяется с отчётом обо **всех** ошибках |
-| `skip-row` | ошибочные строки пропускаются и попадают в отчёт, корректные сохраняются; ответ 200 |
-
-Ошибки значений, ссылок, ключей и Bean Validation находятся до записи в БД. **Ошибка самой БД**
-(уникальность, NOT NULL, внешний ключ при записи строки) делает транзакцию непригодной, поэтому
-**и в `skip-row` она отменяет весь лист**: `Запись нарушает ограничение целостности базы данных; импорт листа отменён`.
-При `skip-row` в UPSERT несопоставленная колонка попадает в отчёт, но строки импортируются.
-
-### Лимиты и сообщения файла
-
-| Сообщение (400) | Когда |
-|---|---|
-| `Файл превышает допустимый размер` | файл больше `argent.transfer.max-upload-bytes` или лимита multipart Spring |
-| `Распакованный XLSX превышает допустимый размер` | сумма распакованных элементов ZIP больше `max-upload-bytes × 8` (не меньше 10 МБ) |
-| `Лист превышает допустимое число строк` | строк данных больше `argent.transfer.max-rows`; в XLSX считаются физические строки, в том числе пустые с форматированием |
-| `Лист не найден: <имя>` | нет листа `sheet` |
-| `Файл не содержит листов` | пустая книга |
-| `Для импорта всех листов нужен файл XLSX` | CSV в многолистовом импорте |
-| `Не удалось прочитать файл XLSX` / `Не удалось прочитать файл CSV` | файл повреждён или не того формата |
-| `Режим импорта должен быть REPLACE или UPSERT` | неверный `mode` |
-
-CSV читается в UTF-8 (BOM допускается), а если файл не в UTF-8 — в windows-1251 (так сохраняет
-Excel в русской локали). Разделитель `;`, `,` или табуляция определяется по строке заголовков.
-Защита от zip-бомб: до разбора книги все элементы ZIP распаковываются в никуда и их **суммарный**
-распакованный размер ограничен `max-upload-bytes × 8` (не меньше 10 МБ); тот же лимит действует
-для каждого элемента через POI `ZipSecureFile` (настройка глобальна для JVM). Прошедшая проверку
-книга разбирается POI **целиком в памяти**, и только после этого проверяется `max-rows` — память
-под импорт оценивайте по распакованному размеру, а не по числу строк.
-
-### Импорт из кода
-
-`DictionaryImportService` (бин) — то же самое без REST:
-
-```java
-ImportReport report = importService.importSheet("ref_city", sheet, ImportMode.UPSERT,
-        ColumnMapping.auto(schemas.describe("ref_city"), sheet.headers()).withKeyFields(List.of("code")));
-```
-
-- `importSheet(code, sheet, mode, mapping)` — стратегия из свойств; перегрузка с
-  `ImportOnError` задаёт её явно; `mapping = null` — автоматическое сопоставление.
-- Методы `@Transactional`; отменённый лист — `ImportFailedException` с `report()`.
-- **Сервис права не проверяет** — это делает контроллер.
-- `importSheet` вызывает `entityManager.clear()` (чтобы не держать в памяти весь лист):
-  управляемые сущности вызывающего кода в той же транзакции становятся **detached** — их
-  изменения после вызова не сохранятся без `merge`, а ленивые связи не загрузятся. Читайте
-  нужные сущности заново после импорта.
-
-### Ручной импорт через `TableReader`
-
-Для данных, которые не являются справочником (пользователи, документы), бин `TableReader`
-читает файл, а дальше работает код приложения:
-
-```java
-List<SheetData> sheets = tableReader.readXlsx(file.getInputStream()); // или readCsv(...) — один лист
-for (RowData row : sheets.getFirst().rows()) {      // пустые строки уже пропущены
-    provisioning.upsert(row.value("Логин"), row.value("ФИО"));
-}
-```
-
-`SheetData` — `{name, headers, rows}`; `RowData` — `{excelRow, values}`, `value(заголовок)`
-возвращает строку (пустая ячейка — `""`, нет колонки — `null`). Лимиты размера и строк те же.
-Бин `ValueConverter` переводит строку в тип (`convertScalar(LocalDate.class, "31.12.2026")`).
-
-## Экспорт
-
-### REST экспорта
-
-| Метод и путь | Доступ | Ответ |
-|---|---|---|
-| `POST /api/export/{format}` | любой вошедший (данные присылает клиент) | тело `TableData` → файл |
-| `GET /api/export/dictionaries/{code}?format=xlsx\|csv\|docx&search=&sort=` | `read` на таблицу `{code}` | справочник целиком → файл |
-
-- `format` — `xlsx`, `csv`, `docx` без учёта регистра; для справочника по умолчанию `xlsx`.
-  **PDF в этой версии не поддерживается**: `pdf` — 400 `Формат PDF не поддерживается`; прочее —
-  400 `Неизвестный формат экспорта: <формат>`.
-- Ответ — файл с `Content-Disposition: attachment` (имя из заголовка таблицы, UTF-8, до 100
-  символов, без запрещённых в именах файлов символов; пустое — `export`) и
-  `X-Content-Type-Options: nosniff`.
-- Не больше `argent.transfer.max-rows` строк: 400 `Слишком много строк для экспорта: больше <N>`
-  (`TableData`) или `Слишком много записей для экспорта: больше <N>` (справочник).
-- Не больше `argent.transfer.export-max-columns` колонок (по умолчанию 1000): 400
-  `Слишком много колонок: <n>, допустимо не более <лимит>`; и не больше
-  `argent.transfer.export-max-cells` ячеек, строки × колонки (по умолчанию 2 000 000): 400
-  `Слишком много ячеек: <n>, допустимо не более <лимит>`. Оба лимита действуют для обоих
-  эндпоинтов и для бина `TableExporter`; файл строится в памяти, поэтому лимиты защищают сервер.
-
-`TableData`:
-
-```json
-{
-  "title": "Заказы",
-  "columns": [
-    { "key": "number", "label": "Номер" },
-    { "key": "amount", "label": "Сумма", "type": "NUMBER" },
-    { "key": "date",   "label": "Дата",  "type": "DATE" }
-  ],
-  "rows": [ { "number": "ORD-1", "amount": 1500.5, "date": "2026-11-08" } ]
-}
-```
-
-- `type`: `TEXT` (по умолчанию), `NUMBER`, `DATE` (`дд.мм.гггг`), `DATETIME`
-  (`дд.мм.гггг чч:мм`), `BOOLEAN` («Да»/«Нет»), без учёта регистра. Даты — строки ISO-8601.
-- Пустой `label` — используется `key`; пустой `title` — «Таблица». Колонки обязательны, ключи
-  непустые и не повторяются.
-
-Справочник выгружается так: колонки — видимые поля по `order` из `@DictionaryField`, заголовок —
-`label`; ссылки — поле отображения связанной записи (без него — идентификатор), enum — имя
-константы; коллекции, множественные ссылки, вложенные объекты и `byte[]` пропускаются. `search`
-и `sort` (`поле,asc|desc`) — как в универсальной таблице справочника.
-
-### Форматы
-
-| Формат | Особенности |
-|---|---|
-| XLSX | жирная закреплённая шапка, ширина колонок по содержимому (до 60 символов), нативные числа и даты; даты раньше 1900 года и значения, не приводимые к типу колонки, — текстом |
-| CSV | UTF-8 с BOM, разделитель `;`, строки CRLF, десятичная запятая — открывается в Excel с русской локалью. **Защита от CSV-инъекций**: текст, начинающийся с `=`, `+`, `-`, `@`, табуляции или CR, получает префикс `'`; настоящие числа не меняются |
-| DOCX | заголовок и таблица с жирной шапкой; значения — как в CSV |
-
-Даты с часовым поясом выводятся в часовом поясе сервера. Из кода: бин `TableExporter`
-(`toXlsx`, `toCsv`, `toDocx` от `TableData`) и `DictionaryExportService.build(code, search, sort)`.
-
-## Статусы
-
-Три библиотечных справочника задают статусную машину и редактируются через обычную админку
-справочников (права — гранты на таблицы, например `"common_status": ["read", "write"]`):
-
-| Справочник | Поля |
-|---|---|
-| `common_status_type` | `code` (уникален), `name` |
-| `common_status` | `statusType`, `code` (уникален в типе), `name`, `sortOrder`, `initialStatus`, `finalStatus` |
-| `common_status_transition` | `statusType`, `fromStatus` (пусто — присвоение при создании записи), `toStatus`, `requiredAction` (пусто — переход доступен всем) |
-
-- Удаление типа удаляет его статусы и переходы, удаление статуса — его переходы (каскад в БД).
-- Признаки «Начальный»/«Конечный» информационные: сервис проверяет только таблицу переходов.
-- У переходов нет поля отображения: в ссылках они показываются идентификатором.
-- **Не переименовывайте и не удаляйте коды статусов (и их тип), пока на них ссылаются записи
-  приложения**: записи хранят код строкой, и `assertAllowed` для такой записи ответит 404
-  `Статус не найден: <код>` — запись «застрянет». Сначала переведите записи, потом меняйте справочник.
-- `requiredAction`, которого нет ни у одной роли (или с опечаткой), делает переход доступным
-  только держателю `admin` — проверяйте действие по каталогу `/api/grants`.
-- Правки `common_status_transition` (и `common_sequence`) пишутся в журнал аудита — кто и когда
-  изменил `requiredAction`, видно в `common_audit_entry`.
-
-**Библиотека только проверяет переход; поле статуса в своей сущности приложение хранит и меняет
-само** (например, код статуса строкой).
-
-```java
-@Service
-@RequiredArgsConstructor
-public class OrderService {
-
-    private final StatusTransitionService statuses;
-    private final OrderRepository orders;
-
-    @Transactional
-    public void changeStatus(UUID id, String target) {
-        Order order = orders.findById(id).orElseThrow(EntityNotFoundException::new);
-        statuses.assertAllowed("ORDER_STATUS", order.getStatus(), target); // null — создание
-        order.setStatus(target);
-    }
-}
-```
-
-| Метод `StatusTransitionService` | Что делает |
-|---|---|
-| `assertAllowed(typeCode, fromCode, toCode)` | проверяет, что переход есть и доступен текущему пользователю; `fromCode = null` — создание записи |
-| `allowedFrom(typeCode, fromCode)` | статусы, в которые текущий пользователь может перевести запись, по `sortOrder`, затем по коду |
-
-| Ошибка | Ответ |
-|---|---|
-| `EntityNotFoundException` `Тип статуса не найден: <тип>` / `Статус не найден: <код>` | 404 |
-| `IllegalStateException` `Переход <из>→<в> не предусмотрен` (для создания — `(создание)→<в>`) | 409 |
-| `GrantsAccessDeniedException` `Для перехода требуется действие <действие>` | 403 |
-
-Действие перехода проверяется через `CurrentUser.hasAction` (держатель `admin` проходит любое);
-анонимный вызов переход с действием не проходит. Переходы, у которых статусы относятся к другому
-типу, не учитываются.
-
-Отказы `assertAllowed` (404/409/403) **не помечают транзакцию вызывающего на откат**: исключение
-можно поймать внутри своей `@Transactional`-операции и продолжить работу — фиксация пройдёт без
-`UnexpectedRollbackException`.
-
-`GET /api/status/{type}/transitions?from=<код>` (любой вошедший) — `allowedFrom` для формы: список
-`{id, statusType, code, name, sortOrder, initialStatus, finalStatus}`. Без `from` или с пустым
-`from` — статусы, доступные при создании. Неизвестный тип или статус — 404.
-
-Начальные данные удобно положить в миграцию приложения (таблицы V4 к этому моменту уже есть):
-
-```sql
-INSERT INTO common_status_type (id, code, name)
-VALUES (gen_random_uuid(), 'ORDER_STATUS', 'Статус заказа')
-ON CONFLICT (code) DO NOTHING;
-INSERT INTO common_status (id, status_type_id, code, name, sort_order, is_initial, is_final)
-SELECT gen_random_uuid(), id, 'NEW', 'Новый', 10, TRUE, FALSE FROM common_status_type WHERE code = 'ORDER_STATUS'
-ON CONFLICT (status_type_id, code) DO NOTHING;
-INSERT INTO common_status (id, status_type_id, code, name, sort_order, is_initial, is_final)
-SELECT gen_random_uuid(), id, 'DONE', 'Выполнен', 20, FALSE, TRUE FROM common_status_type WHERE code = 'ORDER_STATUS'
-ON CONFLICT (status_type_id, code) DO NOTHING;
--- создание (from = NULL): без required_action, доступно всем с правом записи
-INSERT INTO common_status_transition (id, status_type_id, from_status_id, to_status_id, required_action)
-SELECT gen_random_uuid(), t.id, NULL, s.id, NULL FROM common_status_type t
-JOIN common_status s ON s.status_type_id = t.id AND s.code = 'NEW'
-WHERE t.code = 'ORDER_STATUS'
-  AND NOT EXISTS (SELECT 1 FROM common_status_transition x
-                  WHERE x.status_type_id = t.id AND x.from_status_id IS NULL AND x.to_status_id = s.id);
--- переход NEW → DONE только для обладателей действия orders.approve
-INSERT INTO common_status_transition (id, status_type_id, from_status_id, to_status_id, required_action)
-SELECT gen_random_uuid(), t.id, f.id, s.id, 'orders.approve' FROM common_status_type t
-JOIN common_status f ON f.status_type_id = t.id AND f.code = 'NEW'
-JOIN common_status s ON s.status_type_id = t.id AND s.code = 'DONE'
-WHERE t.code = 'ORDER_STATUS'
-ON CONFLICT (status_type_id, from_status_id, to_status_id) DO NOTHING;
-```
-
-## Нумерация
-
-Счётчики номеров документов — библиотечный справочник `common_sequence` («Счётчики номеров»):
-
-| Поле | Смысл |
-|---|---|
-| `code` | уникальный код счётчика |
-| `pattern` | шаблон `String.format`: `%1$s` — ключ периода, `%2$d` — счётчик, например `ORD-%1$s-%2$05d` |
-| `resetPeriod` | `NEVER`, `YEARLY`, `MONTHLY`, `WEEKLY`, `DAILY` |
-| `periodKey` | ключ периода последнего номера (только чтение) |
-| `counter` | последнее выданное значение (только чтение) |
-
-**`counter` и `periodKey` через админку не редактируются**: форма их показывает, но при сохранении
-не записывает, а сущность обновляет только изменённые колонки (`@DynamicUpdate`) — правка
-`pattern` или `resetPeriod` не откатывает счётчик, даже если параллельно выдаются номера.
-
-Шаблон проверяется при сохранении пробным форматированием: он должен форматироваться и содержать
-счётчик (`%2$d` с флагами и шириной). Сохранение недопустимого шаблона через REST справочника
-отвечает 400 «Ошибка валидации» с `errors[0].field = "pattern"` и
-`errors[0].message = "Недопустимый шаблон номера: <шаблон>"` (проверку выполняет аннотация
-`@SequencePattern` на DTO). Прямой вызов `PatternValidator.validate(шаблон)` бросает
-`IllegalArgumentException` с тем же текстом.
-
-| Период | Ключ (`%1$s`) | Пример номера по `ORD-%1$s-%2$05d` |
-|---|---|---|
-| `NEVER` | `1` | `ORD-1-00042` |
-| `YEARLY` | `2026` | `ORD-2026-00001` |
-| `MONTHLY` | `2026-11` | `ORD-2026-11-00001` |
-| `WEEKLY` | ISO-неделя `2026-W45` (2025-12-29 → `2026-W01`) | `ORD-2026-W45-00001` |
-| `DAILY` | `20261108` | `ORD-20261108-00001` |
-
-```java
-@Transactional
-public Order create(OrderDto dto) {
-    Order order = new Order();
-    order.setNumber(numberGenerator.next("ORDER"));
-    return orders.save(order);
-}
-```
-
-- `NumberGenerator.next(code)` увеличивает счётчик или сбрасывает его на 1 при смене ключа
-  периода и возвращает номер. Нет счётчика — `EntityNotFoundException` `Счётчик не найден: <код>` (404).
-- **Транзакционность.** `next` работает в транзакции вызывающего кода (без неё — в своей):
-  строка счётчика блокируется (`SELECT … FOR UPDATE`) до конца транзакции, поэтому параллельные
-  вызовы по одному коду выполняются по очереди — номера не дублируются; откат транзакции
-  откатывает и номер, так что при фиксации номера идут без пропусков. Держите транзакцию с
-  `next` короткой. В `@Transactional(readOnly = true)` вызывать нельзя — счётчик обновляется.
-- **Начальное значение `counter` игнорируется при первом вызове**, если `period_key` пуст: у новой
-  строки ключа периода нет, и первый `next` выдаёт 1 (для любого периода).
-- **Продолжить существующую нумерацию** можно только SQL (миграцией или вручную):
-
-  ```sql
-  UPDATE common_sequence SET counter = 1500, period_key = '2026-11' WHERE code = 'ORDER';
-  ```
-
-  Следующий `next` выдаст 1501. `period_key` должен совпадать с ключом **текущего** периода
-  (см. таблицу выше: `1` для `NEVER`, `2026` для `YEARLY`, `2026-11` для `MONTHLY`, `2026-W45`
-  для `WEEKLY`, `20261108` для `DAILY`), иначе следующий вызов сочтёт период сменившимся и
-  сбросит счётчик на 1.
-- **Сохранённый шаблон проверяется при каждом `next`** (до увеличения счётчика): шаблон,
-  записанный в обход справочника (SQL) и не прошедший проверку, даёт `IllegalStateException`
-  `Недопустимый шаблон номера счётчика <код>: <шаблон>` (409); номер не расходуется.
-- **Вызов в read-only транзакции** даёт `IllegalStateException`
-  `NumberGenerator.next нельзя вызывать в read-only транзакции` (409).
-- Отказы `next` (404/409) не помечают транзакцию вызывающего на откат — исключение можно
-  поймать и продолжить работу.
-- Выдача номера идёт через JDBC и **в журнал аудита не пишется**; правки счётчика через админку
-  (шаблон, период) аудируются.
-- Дата периода берётся из бина `java.time.Clock` (по умолчанию системные часы в зоне сервера).
-  Свой бин `Clock` (например, фиксированный в тестах) заменяет библиотечный.
-- **Все экземпляры приложения должны работать в одном часовом поясе** (`Clock`/`TZ`/`user.timezone`):
-  иначе около полуночи (и на границах недель, месяцев, лет) экземпляры вычисляют разные ключи
-  периода, ключ «скачет» туда-обратно, и счётчик сбрасывается на 1 — номера дублируются.
-
-Счётчик создаётся через админку справочника или миграцией приложения:
+Счётчик — строка `common_sequence` (админка или миграция):
 
 ```sql
 INSERT INTO common_sequence (id, code, pattern, reset_period, counter)
-VALUES (gen_random_uuid(), 'ORDER', 'ORD-%1$s-%2$05d', 'YEARLY', 0)
-ON CONFLICT (code) DO NOTHING;
+VALUES (gen_random_uuid(), 'ORDER', 'ORD-%1$s-%2$05d', 'YEARLY', 0) ON CONFLICT (code) DO NOTHING;
 ```
 
-## Аудит
+`numberGenerator.next("ORDER")` в транзакции создания записи. Подробно: [Нумерация](docs/reference.md#8-нумерация).
 
-```java
-@Entity
-@Audited
-@Table(name = "orders")
-public class Order {
-    @AuditIgnore
-    private String secretToken;
-    ...
-}
-```
+Проверка: первый вызов возвращает `ORD-<год>-00001`.
 
-Изменения сущностей с `@Audited` (аннотация наследуется подклассами) пишутся в
-`common_audit_entry`; сущности без неё не аудируются.
-
-| Действие | Что пишется |
-|---|---|
-| `INSERT`, `DELETE` | одна строка без поля и значений |
-| `UPDATE` | строка на каждое изменённое свойство: `field`, `old_value`, `new_value` |
-| `REPLACE` | импорт справочника в режиме REPLACE: `entity_id` пусто, `new_value` — число удалённых строк (пишется для любого справочника) |
-
-- Значения — `toString()`; **ссылки на сущности — их id**; **коллекции не пишутся**; свойство
-  `@Version` не пишется.
-- `@AuditIgnore` на поле — факт изменения пишется, значения заменяются на `***`.
-- Тип сущности (`entity_type`) — имя из `@Table(name)`; **без `@Table` — физическое имя таблицы**
-  Hibernate после стратегии именования, без схемы и кавычек.
-- Автор — `actor_id` и `actor_login` из токена текущего запроса; вне запроса пусто.
-- Запись идёт `JdbcTemplate` в той же транзакции и откатывается вместе с изменением.
-  **Изменение вне Spring-транзакции** (например, транзакция, открытая вручную через
-  `EntityManager`) пишет аудит отдельным соединением в режиме autocommit: строка журнала
-  фиксируется сразу и не откатывается вместе с данными.
-- Слушатель подключается к `EntityManagerFactory` Spring Boot через `HibernatePropertiesCustomizer`
-  (свойство `hibernate.integrator_provider`; объект `IntegratorProvider` приложения сохраняется,
-  а строковое значение этого свойства будет заменено). **Собственный `EntityManagerFactory`
-  приложения обходит аудит.** Массовые операции мимо Hibernate (JPQL/SQL `UPDATE`, `DELETE`) тоже
-  не аудируются.
-
-`GET /api/audit?entityType=&entityId=&action=&from=&to=&page=0&size=20`:
-
-- `entityType` (имя таблицы) обязателен; доступ — `read` на эту таблицу **или** действие `admin`.
-- `from`/`to` — моменты ISO-8601 (`2026-11-08T00:00:00Z`), `from` включительно, `to` исключительно;
-  `size` ограничивается 1..500.
-- Ответ — `DynamicPage` из `{id, entityType, entityId, action, field, oldValue, newValue,
-  actorId, actorLogin, createdAt}`, от новых записей к старым.
-
-## REST
-
-Токен передаётся в заголовке `Authorization: Bearer <token>`.
-
-### `/api/auth`
-
-| Метод и путь | Доступ | Тело → ответ |
-|---|---|---|
-| `POST /api/auth/login` | открыт | `{login, password}` → `{token}`; 401 при неверных данных |
-| `POST /api/auth/register` | открыт | `{login, displayName, password}` → 201 `{token}`; 403, если регистрация выключена; 400, если логин занят |
-| `POST /api/auth/logout` | вошедший | → 204, сессия текущего токена отзывается |
-| `GET /api/auth/me` | вошедший | → `{id, login, displayName, grants: {tables, actions}}` — эффективные права |
-| `GET /api/auth/config` | открыт | → `{passwordRequired, registrationEnabled}` |
-
-Пример `me`: `"grants": {"tables": {"*": ["read"], "documents": ["read", "write"]}, "actions": ["documents.approve"]}`
-(таблицы, операции и действия — по алфавиту).
-
-При регистрации: `login` до 100 символов, `displayName` до 255, `password` от 6 до 72.
-
-### `/api/users` — требует действие `admin`
-
-| Метод и путь | Тело → ответ |
-|---|---|
-| `GET /api/users?search&page=0&size=20` | → `DynamicPage<UserDto>` (`items, page, size, totalElements, totalPages, first, last`), по логину; `size` ограничивается 1..100; поиск по логину или имени без учёта регистра |
-| `POST /api/users` | `{login, displayName, password?}` → 201 `UserDto`; пользователь создаётся без ролей, без `password` — без пароля; 400, если логин занят |
-| `PUT /api/users/{id}` | `{displayName, enabled}` → `UserDto` |
-| `PUT /api/users/{id}/roles` | `{roleCodes[]}` → `UserDto`; заменяет роли, пустой список снимает все; 400 `Неизвестная роль: <код>` |
-| `POST /api/users/{id}/password` | `{password}` → 204; все сессии пользователя отзываются |
-| `POST /api/users/{id}/revoke-sessions` | → 204 |
-
-`UserDto`: `id, login, displayName, enabled, hasPassword, roles[], createdAt`.
-Ограничения: `login` до 100 символов, `displayName` до 255, `password` от 6 до 72.
-
-### `/api/roles` — требует действие `admin`
-
-Роль адресуется кодом.
-
-| Метод и путь | Тело → ответ |
-|---|---|
-| `GET /api/roles` | → список `RoleDto`, по коду |
-| `GET /api/roles/{code}` | → `RoleDto`; 404, если роли нет |
-| `PUT /api/roles/{code}` | `{name, description?, grants?}` → 200 `RoleDto`; создаёт роль, если её нет, иначе изменяет; гранты заменяются целиком (без `grants` — роль без прав) |
-| `DELETE /api/roles/{code}` | → 204; только несистемная роль, не назначенная пользователям |
-
-Код роли: `[A-Z][A-Z0-9_]{0,49}`, иначе 400 (`errors[].field` = `code`, `Недопустимый код роли`).
-`name` обязательно, до 255 символов; `description` до 1000. `grants` — JSON-объект в формате
-выше. `RoleDto`: `id, code, name, description, system, grants{tables, actions}`.
-
-```http
-PUT /api/roles/APPROVER
-Content-Type: application/json
-
-{
-  "name": "Согласующий",
-  "description": "Видит справочники, согласует документы",
-  "grants": {
-    "tables": { "documents": ["read", "write"], "*": ["read"] },
-    "actions": ["documents.approve"]
-  }
-}
-```
-
-### `/api/grants` — требует действие `admin`
-
-| Метод и путь | Ответ |
-|---|---|
-| `GET /api/grants/catalog` | `{tables[], actions[]}` — см. «Каталог подсказок» |
-
-## Формат ошибок
-
-Все ошибки возвращаются как `ProblemDetail` (`application/problem+json`). Ошибки валидации
-дополнительно содержат `errors` — список пар `field`/`message`:
-
-```json
-{
-  "type": "about:blank",
-  "title": "Ошибка валидации",
-  "status": 400,
-  "detail": "Параметры запроса не прошли проверку.",
-  "instance": "/api/users",
-  "errors": [
-    { "field": "login", "message": "не должно быть пустым" }
-  ]
-}
-```
-
-(текст `message` зависит от локали валидатора)
-
-| Статус | `title` | Когда |
-|---|---|---|
-| 400 | Ошибка валидации | Bean Validation тела или параметров, `ValidationErrorsException` (есть `errors`), в том числе ошибки грантов |
-| 400 | Некорректный запрос | неразбираемый JSON, неверный тип параметра, `IllegalArgumentException`, превышение лимита multipart |
-| 400 | Ошибка импорта | импорт листа отменён (`ImportFailedException`); отчёт — в свойстве `report` |
-| 401 | Требуется вход | нет токена или он недействителен; при неудачном входе `detail` — причина |
-| 403 | Недостаточно прав | нет права; `detail` общий, кроме «Регистрация отключена», отказов правил администрирования и запрета перехода статуса («Для перехода требуется действие …») |
-| 404 | Не найдено | `EntityNotFoundException` (пользователь, роль), `DynamicDictionaryNotFoundException` (справочник) |
-| 409 | Конфликт данных | `IllegalStateException` (текст в `detail`), нарушение ограничения БД (общий текст) |
-| 500 | Внутренняя ошибка сервера | всё прочее; подробности только в журнале |
-
-Ошибки контроллеров справочников может формировать собственный обработчик модуля справочников
-(`DynamicDictionaryExceptionHandler`) — формат и статусы те же, заголовок может отличаться
-(например, «Справочник не найден» для 404).
-
-Неизвестный код справочника (при наличии гранта на него или на `*`): маршруты
-`/{code}/form`, `GET`/`PUT`/`DELETE /{code}/records/{id}`, `POST /{code}/records` отвечают
-**400** (как и на отсутствующую запись), а маршруты `/{code}/schema`, `GET /{code}/records`,
-`/{code}/options` — **404**. Без гранта на такой код — 403.
-
-Ручная валидация в приложении — `throw new ValidationErrorsException(Map.of("поле", "сообщение"))`.
-Текст SQL и стек вызовов клиенту не передаются.
-
-## Замена частей библиотеки
-
-Бины библиотеки объявлены с `@ConditionalOnMissingBean`: свой бин того же типа (или имени)
-заменяет библиотечный (в том числе `argentAccess`, `DictionaryAuthorizationManager`,
-`RoleSeeder`). Особого внимания требуют три случая.
-
-> **`SecurityFilterChain`.** Библиотечная цепочка — бин `argentSecurityFilterChain`. Свой бин
-> с этим именем полностью её заменяет вместе с открытыми путями, правилом справочников, CORS и
-> ответами ProblemDetail. Дополнительная цепочка приложения должна иметь собственный
-> `securityMatcher` и более высокий приоритет (`@Order`), иначе она конфликтует с библиотечной.
-
-> **`JwtDecoder`.** Свой декодер отключает проверку библиотеки — существование и активность
-> сессии и пользователя. Выход и отзыв сессий перестанут действовать до истечения токена.
-
-> **`FlywayMigrationStrategy`.** Свой бин отключает миграции библиотеки (см. «Flyway»).
-
-Бины этапа 2 заменяются так же: `TableReader`, `ValueConverter`, `DictionaryImportService`,
-`ImportController`, `ImportExceptionHandler`, `TableExporter`, `DictionaryExportService`,
-`ExportController`, `StatusTransitionService`, `StatusController`, `NumberGenerator`, `Clock`,
-`AuditWriter`, `AuditController`. `AuditRecorder` — точка записи REPLACE в аудит: без модуля
-аудита он ничего не делает, свой бин заменяет библиотечный.
-
-## Swagger UI
-
-springdoc приходит транзитивно. Swagger UI — `/swagger-ui.html`, спецификация —
-`/v3/api-docs`; оба пути открыты без входа. Для вызова защищённых методов получите токен
-через `POST /api/auth/login`.
-
-## Тесты
-
-Интеграционные тесты используют Testcontainers (`postgres:17-alpine`) — нужен запущенный Docker.
+### Импорт и экспорт
 
 ```bash
-./mvnw test
-./mvnw -q install -DskipTests   # сборка и установка без тестов
+curl -s $H/api/import/dictionaries/orders -H "Authorization: Bearer $TOKEN" \
+  -F file=@orders.xlsx -F mode=UPSERT -F keyFields=customer
+curl -s "$H/api/export/dictionaries/orders?format=xlsx" -H "Authorization: Bearer $TOKEN" -o orders.xlsx
 ```
+
+Импорт — действие `import` и `write` на таблицу; экспорт — `read`. Ошибочные строки —
+`argent.transfer.import-on-error` (`fail-all` или `skip-row`). Подробно: [Импорт](docs/reference.md#5-импорт), [Экспорт](docs/reference.md#6-экспорт).
+
+Проверка: импорт отвечает `{"total":…,"created":…,"updated":…,"failed":0,"errors":[]}`.
+
+## Демо-режим без пароля
+
+`argent.auth.password-required=false`: вход только по логину, пароль администратора не нужен.
+**Любой, кто достучится до бэкенда, войдёт под любым пользователем, включая `admin`. Только для демо.**
+
+Проверка: WARN `Вход без пароля включён (…)`; `/api/auth/config` → `"passwordRequired":false`.
+
+`argent.security.enabled=false` — другое: выключает всю безопасность ([подробно](docs/reference.md#argentsecurityenabledfalse)).
+
+## Ссылки
+
+- [docs/reference.md](docs/reference.md) — свойства, REST с кодами, сообщения, лимиты, замена бинов, миграция.
+- Swagger UI — `http://localhost:8080/swagger-ui.html` (открыт без входа; токен — `POST /api/auth/login`).
+- Пример приложения — `main-backend` (заказы со статусами, номерами, `@Version` и вложениями).
+- Тесты библиотеки: `./mvnw test` (нужен Docker).

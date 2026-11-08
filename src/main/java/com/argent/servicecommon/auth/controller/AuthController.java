@@ -22,9 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Objects;
 
 /**
- * Вход, регистрация, выход, текущий пользователь и настройки входа.
- *
- * <p>Пути {@code login}, {@code register} и {@code config} открыты без входа.</p>
+ * Вход, регистрация, выход, текущий пользователь, настройки входа; {@code login}/{@code register}/{@code config}
+ * открыты.
  */
 @RestController
 @RequestMapping("/api/auth")
