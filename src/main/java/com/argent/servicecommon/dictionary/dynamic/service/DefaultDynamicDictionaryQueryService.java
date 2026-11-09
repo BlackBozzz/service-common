@@ -21,6 +21,8 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -212,6 +214,8 @@ public class DefaultDynamicDictionaryQueryService implements DynamicDictionaryQu
         }
         if (type == LocalDate.class) return LocalDate.parse(raw);
         if (type == LocalDateTime.class) return LocalDateTime.parse(raw);
+        if (type == LocalTime.class) return LocalTime.parse(raw);
+        if (type == ZonedDateTime.class) return ZonedDateTime.parse(raw);
         if (type == Instant.class) return Instant.parse(raw);
         if (type == OffsetDateTime.class) return OffsetDateTime.parse(raw);
         if (type.isEnum()) {
@@ -252,7 +256,8 @@ public class DefaultDynamicDictionaryQueryService implements DynamicDictionaryQu
         return type == String.class || type == UUID.class || type.isEnum()
                 || type == Boolean.class || type == boolean.class
                 || Number.class.isAssignableFrom(type) || type.isPrimitive() && type != char.class
-                || type == LocalDate.class || type == LocalDateTime.class || type == Instant.class
+                || type == LocalDate.class || type == LocalDateTime.class || type == LocalTime.class
+                || type == ZonedDateTime.class || type == Instant.class
                 || type == OffsetDateTime.class;
     }
 

@@ -11,8 +11,11 @@ import jakarta.persistence.metamodel.ManagedType;
 import jakarta.persistence.metamodel.PluralAttribute;
 import java.lang.reflect.Field;
 import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Objects;
 
 /**
@@ -134,6 +137,24 @@ public class DefaultDynamicDictionarySchemaService implements DynamicDictionaryS
                     default -> { /* Остальные ограничения остаются в validation. */ }
                 }
             }
+            // Bean Validation описывает бизнес-ограничения, но не диапазон самого Java-типа.
+            // Например, Byte без @Min/@Max всё равно принимает только числа от -128 до 127.
+            // Передаём фактические границы во фронтенд, чтобы запрещать неверный ввод до отправки DTO.
+            String[] javaBounds = javaNumericBounds(dtoValueType);
+            if (javaBounds != null) {
+                java.math.BigDecimal javaMinimum = new java.math.BigDecimal(javaBounds[0]);
+                java.math.BigDecimal javaMaximum = new java.math.BigDecimal(javaBounds[1]);
+                if (minimum == null || new java.math.BigDecimal(minimum).compareTo(javaMinimum) < 0) {
+                    minimum = javaBounds[0];
+                }
+                if (maximum == null || new java.math.BigDecimal(maximum).compareTo(javaMaximum) > 0) {
+                    maximum = javaBounds[1];
+                }
+            }
+            // UUID требует корректного формата даже без явного @Pattern.
+            if (dtoValueType == java.util.UUID.class && pattern == null) {
+                pattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+            }
             String control = options != null && options.control() != DynamicFormField.Control.AUTO
                     ? options.control().name().toLowerCase(java.util.Locale.ROOT)
                     : defaultControl(field, type, reference);
@@ -143,9 +164,68 @@ public class DefaultDynamicDictionarySchemaService implements DynamicDictionaryS
                     options == null ? "" : options.help(), field.order(), field.visible(),
                     field.readOnly(), field.required(), minLength, maxLength, minItems, maxItems,
                     minimum, maximum, pattern, field.enumValues(), reference, nested,
-                    field.validation(), field.elementValidation()));
+                    field.validation(), field.elementValidation(), enumLabels(dtoValueType)));
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Возвращает локализованные подписи перечисления без изменения его имён в JSON.
+     * Приоритет: публичный getLabel()/label(), затем поле label (в том числе private).
+     * Если подписи нет, фронтенд использует обычное имя константы.
+     */
+    private static Map<String, String> enumLabels(Class<?> type) {
+        if (!type.isEnum()) return Map.of();
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (Object constant : type.getEnumConstants()) {
+            String name = ((Enum<?>) constant).name();
+            String label = enumLabel(type, constant);
+            if (label != null && !label.isBlank()) labels.put(name, label);
+        }
+        return Map.copyOf(labels);
+    }
+
+    private static String enumLabel(Class<?> type, Object constant) {
+        for (String accessor : List.of("getLabel", "label")) {
+            try {
+                Method method = type.getMethod(accessor);
+                if (method.getParameterCount() != 0) continue;
+                Object value = method.invoke(constant);
+                if (value != null) return String.valueOf(value);
+            } catch (NoSuchMethodException ignored) {
+                // У enum может не быть геттера: проверим объявленное поле label.
+            } catch (ReflectiveOperationException | SecurityException ignored) {
+                // Недоступный геттер не должен нарушать построение формы.
+            }
+        }
+        try {
+            Field labelField = type.getDeclaredField("label");
+            if (labelField.trySetAccessible()) {
+                Object value = labelField.get(constant);
+                return value == null ? null : String.valueOf(value);
+            }
+        } catch (ReflectiveOperationException | SecurityException ignored) {
+            // Нет поля label или оно недоступно: оставляем техническое имя константы.
+        }
+        return null;
+    }
+
+    /** Возвращает ограничения, гарантированные числовым типом Java, даже без @Min/@Max. */
+    private static String[] javaNumericBounds(Class<?> type) {
+        if (type == Byte.class || type == byte.class) {
+            return new String[] { String.valueOf(Byte.MIN_VALUE), String.valueOf(Byte.MAX_VALUE) };
+        }
+        if (type == Short.class || type == short.class) {
+            return new String[] { String.valueOf(Short.MIN_VALUE), String.valueOf(Short.MAX_VALUE) };
+        }
+        if (type == Integer.class || type == int.class) {
+            return new String[] { String.valueOf(Integer.MIN_VALUE), String.valueOf(Integer.MAX_VALUE) };
+        }
+        if (type == Long.class || type == long.class) {
+            return new String[] { String.valueOf(Long.MIN_VALUE), String.valueOf(Long.MAX_VALUE) };
+        }
+        // Для BigInteger/BigDecimal диапазон зависит от модели данных, а не от типа Java.
+        return null;
     }
 
     private static String defaultControl(DictionaryFieldDefinition field, String type,
@@ -156,7 +236,7 @@ public class DefaultDynamicDictionarySchemaService implements DynamicDictionaryS
             case "boolean" -> "checkbox";
             case "date" -> "date";
             case "time" -> "time";
-            case "datetime" -> "datetime";
+            case "datetime", "instant", "offsetdatetime", "zoneddatetime" -> "datetime";
             case "number", "integer", "decimal" -> "number";
             case "enum" -> "select";
             default -> "text";
@@ -167,8 +247,11 @@ public class DefaultDynamicDictionarySchemaService implements DynamicDictionaryS
         if (existing.equals("array") || existing.equals("reference") || existing.equals("object")) return existing;
         if (type == java.time.LocalDate.class) return "date";
         if (type == java.time.LocalTime.class) return "time";
-        if (type == java.time.LocalDateTime.class || type == java.time.Instant.class
-                || type == java.time.OffsetDateTime.class || type == java.time.ZonedDateTime.class) return "datetime";
+        if (type == java.time.LocalDateTime.class) return "datetime";
+        if (type == java.time.Instant.class) return "instant";
+        if (type == java.time.OffsetDateTime.class) return "offsetdatetime";
+        if (type == java.time.ZonedDateTime.class) return "zoneddatetime";
+        if (type == byte[].class || type == Byte[].class) return "binary";
         if (type == java.math.BigDecimal.class || type == double.class || type == Double.class
                 || type == Float.class || type == float.class) return "decimal";
         if (type == java.util.UUID.class) return "uuid";
