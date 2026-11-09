@@ -1,6 +1,5 @@
 package com.argent.servicecommon.audit;
 
-import jakarta.persistence.Table;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.spi.PostDeleteEvent;
 import org.hibernate.event.spi.PostDeleteEventListener;
@@ -9,13 +8,13 @@ import org.hibernate.event.spi.PostInsertEventListener;
 import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.event.spi.PostUpdateEventListener;
 import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.type.CompositeType;
 import org.hibernate.type.Type;
-import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.util.ReflectionUtils;
-import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Field;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -32,6 +31,8 @@ public class AuditEventListener
 
     /** Значение, которым заменяется содержимое полей с {@link AuditIgnore}. */
     public static final String MASK = "***";
+
+    private static final Map<Class<?>, Set<String>> IGNORED_FIELDS = new ConcurrentHashMap<>();
 
     private final AuditWriter writer;
     private final Map<Class<?>, AuditedClass> classes = new ConcurrentHashMap<>();
@@ -61,18 +62,15 @@ public class AuditEventListener
         Object[] oldState = event.getOldState();
         Object[] newState = event.getState();
         SessionFactoryImplementor factory = event.getFactory();
+        String id = idOf(event.getId());
         for (int index : changedProperties(event, types)) {
             // Версия меняется при любом обновлении — отдельная строка для неё лишняя; коллекции не пишутся.
             if (index == versionIndex || types[index].isCollectionType()) {
                 continue;
             }
-            String oldValue = render(factory, types[index], oldState == null ? null : oldState[index]);
-            String newValue = render(factory, types[index], newState == null ? null : newState[index]);
-            if (audited.isIgnored(names[index])) {
-                oldValue = MASK;
-                newValue = MASK;
-            }
-            writer.write(audited.table(), idOf(event.getId()), "UPDATE", names[index], oldValue, newValue);
+            writeChange(factory, audited.table(), id, names[index], types[index],
+                    oldState == null ? null : oldState[index], newState == null ? null : newState[index],
+                    audited.isIgnored(names[index]));
         }
     }
 
@@ -91,6 +89,34 @@ public class AuditEventListener
     }
 
     /**
+     * Строка UPDATE для изменённого свойства. Встроенный объект ({@code @Embedded}) раскладывается на подполя:
+     * по строке на каждое изменённое подполе с именем {@code поле.подполе} (вложенные — {@code a.b.c});
+     * {@link AuditIgnore} на подполе или на всём встроенном объекте заменяет значения на {@link #MASK}.
+     */
+    private void writeChange(SessionFactoryImplementor factory, String table, String id, String field, Type type,
+                             Object oldValue, Object newValue, boolean ignored) {
+        if (type.isComponentType() && type instanceof CompositeType component) {
+            String[] subNames = component.getPropertyNames();
+            Type[] subTypes = component.getSubtypes();
+            Object[] oldValues = componentValues(component, oldValue);
+            Object[] newValues = componentValues(component, newValue);
+            Set<String> ignoredSub = ignoredFields(component.getReturnedClass());
+            for (int sub = 0; sub < subNames.length; sub++) {
+                if (subTypes[sub].isCollectionType()
+                        || sameValue(factory, subTypes[sub], oldValues[sub], newValues[sub])) {
+                    continue;
+                }
+                writeChange(factory, table, id, field + "." + subNames[sub], subTypes[sub], oldValues[sub],
+                        newValues[sub], ignored || ignoredSub.contains(subNames[sub]));
+            }
+            return;
+        }
+        String oldText = ignored ? MASK : render(factory, type, oldValue);
+        String newText = ignored ? MASK : render(factory, type, newValue);
+        writer.write(table, id, "UPDATE", field, oldText, newText);
+    }
+
+    /**
      * Индексы изменённых свойств. Обычно их считает Hibernate; если он их не передал (например, при
      * обновлении отсоединённой сущности), изменения определяются сравнением состояний.
      */
@@ -106,9 +132,29 @@ public class AuditEventListener
         SessionFactoryImplementor factory = event.getFactory();
         return IntStream.range(0, types.length)
                 .filter(index -> !types[index].isCollectionType())
-                .filter(index -> !Objects.equals(render(factory, types[index], oldState[index]),
-                        render(factory, types[index], newState[index])))
+                .filter(index -> !sameValue(factory, types[index], oldState[index], newState[index]))
                 .toArray();
+    }
+
+    /** Значения совпадают: встроенные объекты сравниваются по подполям, остальные — по строковому виду. */
+    private static boolean sameValue(SessionFactoryImplementor factory, Type type, Object oldValue, Object newValue) {
+        if (type.isComponentType() && type instanceof CompositeType component) {
+            Object[] oldValues = componentValues(component, oldValue);
+            Object[] newValues = componentValues(component, newValue);
+            Type[] subTypes = component.getSubtypes();
+            for (int sub = 0; sub < subTypes.length; sub++) {
+                if (!subTypes[sub].isCollectionType()
+                        && !sameValue(factory, subTypes[sub], oldValues[sub], newValues[sub])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return Objects.equals(render(factory, type, oldValue), render(factory, type, newValue));
+    }
+
+    private static Object[] componentValues(CompositeType component, Object value) {
+        return value == null ? new Object[component.getSubtypes().length] : component.getPropertyValues(value);
     }
 
     /** Строковое значение свойства: id для ссылки на сущность, иначе {@code toString()}. */
@@ -141,20 +187,32 @@ public class AuditEventListener
         if (!type.isAnnotationPresent(Audited.class)) {
             return AuditedClass.DISABLED;
         }
-        Table table = AnnotatedElementUtils.findMergedAnnotation(type, Table.class);
-        String tableName = table != null && StringUtils.hasText(table.name())
-                ? table.name()
-                : physicalTableName(persister.getTableName());
-        Set<String> ignored = new HashSet<>();
-        ReflectionUtils.doWithFields(type, field -> ignored.add(field.getName()),
-                (Field field) -> field.isAnnotationPresent(AuditIgnore.class));
-        return new AuditedClass(true, tableName, Set.copyOf(ignored));
+        // Физическое имя таблицы (после стратегии именования), а не @Table(name) дословно: @Table(name = "AuxUpper")
+        // даёт таблицу aux_upper, и журнал должен читаться через /api/audit?entityType=aux_upper.
+        return new AuditedClass(true, physicalTableName(persister.getTableName()), ignoredFields(type));
     }
 
-    /** Имя таблицы без схемы/каталога и кавычек: {@code "it"."aud_order"} → {@code aud_order}. */
+    /** Имена полей класса (с суперклассами), помеченных {@link AuditIgnore}. */
+    private static Set<String> ignoredFields(Class<?> type) {
+        if (type == null) {
+            return Set.of();
+        }
+        return IGNORED_FIELDS.computeIfAbsent(type, key -> {
+            Set<String> ignored = new HashSet<>();
+            ReflectionUtils.doWithFields(key, field -> ignored.add(field.getName()),
+                    (Field field) -> field.isAnnotationPresent(AuditIgnore.class));
+            return Set.copyOf(ignored);
+        });
+    }
+
+    /**
+     * Имя таблицы без схемы/каталога: {@code "it"."aud_order"} → {@code aud_order}. Имя в кавычках сохраняет регистр
+     * (кавычки снимаются), имя без кавычек приводится к нижнему регистру — так его хранит PostgreSQL.
+     */
     static String physicalTableName(String qualified) {
         String name = qualified.substring(qualified.lastIndexOf('.') + 1);
-        return name.replaceAll("[\"`\\[\\]]", "");
+        String unquoted = name.replaceAll("[\"`\\[\\]]", "");
+        return unquoted.equals(name) ? name.toLowerCase(Locale.ROOT) : unquoted;
     }
 
     /** Закэшированные сведения о классе сущности. */

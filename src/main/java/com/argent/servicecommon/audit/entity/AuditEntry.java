@@ -26,8 +26,8 @@ public class AuditEntry {
     @Column(name = "entity_type", nullable = false)
     private String entityType;
 
-    /** Идентификатор записи в строковом виде; {@code null} для операций над всей таблицей. */
-    @Column(name = "entity_id")
+    /** Идентификатор записи в строковом виде (без ограничения длины); {@code null} для операций над всей таблицей. */
+    @Column(name = "entity_id", columnDefinition = "text")
     private String entityId;
 
     /** INSERT, UPDATE, DELETE, REPLACE (импорт), ATTACH или DETACH (вложения). */

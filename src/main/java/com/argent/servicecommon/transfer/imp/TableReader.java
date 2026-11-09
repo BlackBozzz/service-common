@@ -3,6 +3,9 @@ package com.argent.servicecommon.transfer.imp;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -15,7 +18,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
@@ -25,14 +27,18 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Читает листы XLSX и файлы CSV в строки «заголовок → значение» с номерами строк Excel, без учёта локали;
@@ -56,6 +62,8 @@ public class TableReader {
     private static final long MAX_ENTRY_SIZE_FACTOR = 8;
     /** Наибольший размер элемента ZIP, который принимает {@link ZipSecureFile#setMaxEntrySize}. */
     private static final long POI_MAX_ENTRY_SIZE = 0xFFFFFFFFL;
+    /** Первые символы, перед которыми экспорт CSV ставит {@code '} (см. {@code TableExporter.escapeFormula}). */
+    private static final String FORMULA_PREFIXES = "=+-@\t\r";
     private static final Charset WINDOWS_1251 = Charset.forName("windows-1251");
 
     private final long maxBytes;
@@ -87,10 +95,17 @@ public class TableReader {
         byte[] bytes = readLimited(input);
         // Защита от zip-бомбы: сумма распакованных элементов проверяется до разбора книги, каждый
         // элемент дополнительно ограничен ZipSecureFile; минимальная степень сжатия остаётся по
-        // умолчанию POI (0.01). Настройка ZipSecureFile глобальна для JVM.
-        requireUnzippedWithinLimit(bytes);
-        ZipSecureFile.setMaxEntrySize(maxEntrySize);
-        try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+        // умолчанию POI (0.01). Настройка ZipSecureFile глобальна для JVM. Проверка и POI читают один и тот же
+        // временный файл через центральный каталог ZIP: элемент, которого нет в каталоге, не видит никто.
+        Path temp = null;
+        OPCPackage pkg = null;
+        try {
+            temp = Files.createTempFile("argent-import-", ".xlsx");
+            Files.write(temp, bytes);
+            requireUnzippedWithinLimit(temp);
+            ZipSecureFile.setMaxEntrySize(maxEntrySize);
+            pkg = OPCPackage.open(temp.toFile(), PackageAccess.READ);
+            Workbook workbook = new XSSFWorkbook(pkg);
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
             DataFormatter formatter = new DataFormatter(Locale.ROOT);
             List<SheetData> sheets = new ArrayList<>();
@@ -100,8 +115,14 @@ public class TableReader {
             return List.copyOf(sheets);
         } catch (LimitExceededException exception) {
             throw exception;
-        } catch (IOException | RuntimeException exception) {
+        } catch (IOException | InvalidFormatException | RuntimeException exception) {
             throw new IllegalArgumentException("Не удалось прочитать файл XLSX", exception);
+        } finally {
+            if (pkg != null) {
+                // Пакет открыт только для чтения: revert() закрывает файл без попытки сохранения.
+                pkg.revert();
+            }
+            deleteQuietly(temp);
         }
     }
 
@@ -118,14 +139,14 @@ public class TableReader {
             List<RowData> rows = new ArrayList<>();
             for (CSVRecord record : parser) {
                 if (headers == null) {
-                    headers = uniqueHeaders(record.stream().map(TableReader::clean).toList());
+                    headers = uniqueHeaders(record.stream().map(value -> clean(unescapeFormula(value))).toList());
                     continue;
                 }
                 Map<String, String> values = new LinkedHashMap<>();
                 for (int i = 0; i < headers.size(); i++) {
                     String header = headers.get(i);
                     if (header.isEmpty()) continue;
-                    values.put(header, i < record.size() ? clean(record.get(i)) : "");
+                    values.put(header, i < record.size() ? clean(unescapeFormula(record.get(i))) : "");
                 }
                 RowData row = new RowData((int) record.getRecordNumber(), values);
                 if (!row.blank()) rows.add(row);
@@ -240,26 +261,41 @@ public class TableReader {
 
     /**
      * Распаковывает все элементы ZIP в никуда и проверяет, что их суммарный размер не больше
-     * {@code maxBytes * 8} (не меньше 10 МБ). Повреждённый ZIP → «Не удалось прочитать файл XLSX».
+     * {@code maxBytes * 8} (не меньше 10 МБ). Элементы берутся из центрального каталога ({@link ZipFile}) — того же,
+     * по которому книгу затем открывает POI, — поэтому принимаются элементы с дескриптором данных (POI SXSSF и
+     * другие потоковые генераторы), а элементы вне каталога игнорируются обоими. Считаются фактически
+     * распакованные байты, а не размеры из каталога. Повреждённый ZIP → «Не удалось прочитать файл XLSX».
      */
-    private void requireUnzippedWithinLimit(byte[] bytes) {
+    private void requireUnzippedWithinLimit(Path file) throws IOException {
         byte[] buffer = new byte[64 * 1024];
         long total = 0;
-        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
-            while (zip.getNextEntry() != null) {
-                int read;
-                while ((read = zip.read(buffer)) > 0) {
-                    total += read;
-                    if (total > maxEntrySize) {
-                        throw new LimitExceededException(TOO_LARGE_UNZIPPED);
+        try (ZipFile zip = new ZipFile(file.toFile())) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (entry.isDirectory()) continue;
+                if (entry.getSize() > maxEntrySize) {
+                    throw new LimitExceededException(TOO_LARGE_UNZIPPED);
+                }
+                try (InputStream in = zip.getInputStream(entry)) {
+                    int read;
+                    while ((read = in.read(buffer)) > 0) {
+                        total += read;
+                        if (total > maxEntrySize) {
+                            throw new LimitExceededException(TOO_LARGE_UNZIPPED);
+                        }
                     }
                 }
             }
-        } catch (IOException | RuntimeException exception) {
-            if (exception instanceof LimitExceededException limit) {
-                throw limit;
-            }
-            throw new IllegalArgumentException("Не удалось прочитать файл XLSX", exception);
+        }
+    }
+
+    private static void deleteQuietly(Path file) {
+        if (file == null) return;
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException ignored) {
+            file.toFile().deleteOnExit();
         }
     }
 
@@ -322,6 +358,22 @@ public class TableReader {
         LimitExceededException(String message) {
             super(message);
         }
+    }
+
+    /**
+     * Снимает префикс {@code '}, который экспорт CSV ставит перед значением, начинающимся с {@code = + - @}, табуляции
+     * или возврата каретки (защита от формул), а также перед значением, которое само выглядит экранированным
+     * ({@code '+x} экспортируется как {@code ''+x}). Обратная операция к {@code TableExporter.escapeFormula}.
+     */
+    static String unescapeFormula(String value) {
+        if (value == null || value.length() < 2 || value.charAt(0) != '\'') return value;
+        String rest = value.substring(1);
+        return startsWithFormula(rest) || rest.charAt(0) == '\'' && rest.length() > 1
+                && startsWithFormula(rest.substring(1)) ? rest : value;
+    }
+
+    private static boolean startsWithFormula(String text) {
+        return !text.isEmpty() && FORMULA_PREFIXES.indexOf(text.charAt(0)) >= 0;
     }
 
     private static String clean(String value) {

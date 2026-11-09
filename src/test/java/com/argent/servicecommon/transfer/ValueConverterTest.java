@@ -52,6 +52,21 @@ class ValueConverterTest {
     }
 
     @Test
+    void shouldRejectHugeNumbersBeforeParsing() {
+        assertThat(converter.convert(field("integer"), Integer.class, "1e5")).isEqualTo(100_000);
+        assertThat(converter.convert(field("decimal"), BigDecimal.class, "1,5E-6"))
+                .isEqualTo(new BigDecimal("1.5E-6"));
+        long started = System.nanoTime();
+        assertThatThrownBy(() -> converter.convert(field("integer"), java.math.BigInteger.class, "1e20000000"))
+                .hasMessage("Недопустимое число: 1e20000000");
+        assertThat((System.nanoTime() - started) / 1_000_000).isLessThan(1000);
+        assertThatThrownBy(() -> converter.convert(field("decimal"), BigDecimal.class, "1e7"))
+                .hasMessage("Недопустимое число: 1e7");
+        assertThatThrownBy(() -> converter.convert(field("decimal"), BigDecimal.class, "1".repeat(41)))
+                .hasMessage("Недопустимое число: " + "1".repeat(41));
+    }
+
+    @Test
     void shouldConvertDatesBooleansAndEnums() {
         assertThat(converter.convert(field("date"), LocalDate.class, "31.12.2025"))
                 .isEqualTo(LocalDate.of(2025, 12, 31));

@@ -470,6 +470,63 @@ class AdminControllersIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void shouldRequireRoleCodesField() throws Exception {
+        // QA auth #2: тело без roleCodes (или с опечаткой в имени поля) не снимает роли молча.
+        role("HELPER", "{\"tables\":{\"a\":[\"read\"]}}");
+        User petrov = userWithRoles("petrov", "HELPER");
+
+        for (String content : List.of("{}", "{\"roles\":[\"HELPER\"]}", "{\"roleCodes\":null}")) {
+            mvc.perform(asAdmin(put("/api/users/{id}/roles", petrov.getId())).content(content))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors[0].field").value("roleCodes"));
+        }
+        assertThat(userRoleRepository.findByIdUserId(petrov.getId())).hasSize(1);
+
+        mvc.perform(asAdmin(put("/api/users/{id}/roles", petrov.getId())).content("{\"roleCodes\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles", empty()));
+    }
+
+    @Test
+    void shouldNotDeleteRoleWiderThanCaller() throws Exception {
+        // QA auth #4: удалить роль можно только в пределах собственных прав, как и создать.
+        String limited = token(userWithRoles("limited", role("LIMITED", LIMITED_GRANTS)));
+        role("WIDE", "{\"tables\":{\"*\":[\"read\",\"write\"]}}");
+        role("NARROW", "{\"tables\":{\"a\":[\"read\"]},\"actions\":[\"documents.approve\"]}");
+
+        mvc.perform(as(limited, delete("/api/roles/{code}", "WIDE")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("Нельзя удалить роль с правами шире собственных"));
+        assertThat(roleRepository.findByCode("WIDE")).isPresent();
+
+        mvc.perform(as(limited, delete("/api/roles/{code}", "NARROW"))).andExpect(status().isNoContent());
+        mvc.perform(asAdmin(delete("/api/roles/{code}", "WIDE"))).andExpect(status().isNoContent());
+        assertThat(roleRepository.findByCode("WIDE")).isEmpty();
+    }
+
+    @Test
+    void shouldLimitPasswordTo72Utf8Bytes() throws Exception {
+        // QA auth #3: BCrypt принимает не больше 72 байт; 40 кириллических символов — 80 байт.
+        String cyrillic = "п".repeat(40);
+        User sidorov = userWithRoles("sidorov");
+
+        mvc.perform(asAdmin(post("/api/users/{id}/password", sidorov.getId()))
+                        .content("{\"password\":\"" + cyrillic + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("password"))
+                .andExpect(jsonPath("$.errors[0].message").value("Пароль не должен превышать 72 байта в UTF-8"));
+        mvc.perform(asAdmin(post("/api/users"))
+                        .content("{\"login\":\"petrov\",\"displayName\":\"Петров\",\"password\":\"" + cyrillic + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("password"));
+        assertThat(userRepository.findByLogin("petrov")).isEmpty();
+        // 36 кириллических символов — ровно 72 байта.
+        mvc.perform(asAdmin(post("/api/users/{id}/password", sidorov.getId()))
+                        .content("{\"password\":\"" + "п".repeat(36) + "\"}"))
+                .andExpect(status().isNoContent());
+    }
+
     private ResultActions putRole(String token, String code, String name, String description, String grants)
             throws Exception {
         StringBuilder content = new StringBuilder("{\"name\":").append(JSON.writeValueAsString(name));

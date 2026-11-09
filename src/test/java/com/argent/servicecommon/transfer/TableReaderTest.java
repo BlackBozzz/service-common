@@ -98,6 +98,32 @@ class TableReaderTest {
     }
 
     @Test
+    void shouldReadStreamingXlsxWithDataDescriptors() {
+        // QA H-1: TableExporter пишет XLSX через SXSSF (элементы ZIP с дескриптором данных).
+        byte[] exported = new com.argent.servicecommon.transfer.exp.TableExporter().toXlsx(
+                new com.argent.servicecommon.transfer.exp.TableData("Страны",
+                        List.of(new com.argent.servicecommon.transfer.exp.TableData.Column("name", "Название", null)),
+                        List.of(Map.of("name", "Франция"))));
+
+        List<SheetData> sheets = new TableReader().readXlsx(new ByteArrayInputStream(exported));
+
+        assertThat(sheets.getFirst().rows()).singleElement()
+                .satisfies(row -> assertThat(row.values()).containsEntry("Название", "Франция"));
+    }
+
+    @Test
+    void shouldStripCsvFormulaApostropheOnlyBeforeFormulaCharacters() {
+        byte[] csv = "Код;Текст\n'+7900;'обычный\n'=1+1;'\n'-x;''@y\n".getBytes(StandardCharsets.UTF_8);
+
+        SheetData sheet = new TableReader().readCsv(new ByteArrayInputStream(csv));
+
+        assertThat(sheet.rows()).extracting(row -> row.values().get("Код"))
+                .containsExactly("+7900", "=1+1", "-x");
+        assertThat(sheet.rows()).extracting(row -> row.values().get("Текст"))
+                .containsExactly("'обычный", "'", "'@y");
+    }
+
+    @Test
     void shouldReadCsvWithBom() {
         SheetData sheet = new TableReader().readCsv(new ByteArrayInputStream(csvWithBom));
 
@@ -192,6 +218,65 @@ class TableReaderTest {
         assertThatThrownBy(() -> reader.readXlsx(new ByteArrayInputStream(bomb)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(TableReader.TOO_LARGE_UNZIPPED);
+    }
+
+    /**
+     * Элемент есть в локальных заголовках, но не в центральном каталоге. Проверка размера и POI читают один и тот же
+     * временный файл через центральный каталог, поэтому скрытый элемент не распаковывается никем и игнорируется:
+     * книга читается, а лимит не обходится (до исправления POI разбирал поток по локальным заголовкам).
+     */
+    @Test
+    void shouldIgnoreLocalEntryMissingFromCentralDirectory() throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(out);
+             java.util.zip.ZipInputStream source = new java.util.zip.ZipInputStream(new ByteArrayInputStream(workbook))) {
+            for (ZipEntry entry; (entry = source.getNextEntry()) != null; ) {
+                zip.putNextEntry(new ZipEntry(entry.getName()));
+                source.transferTo(zip);
+                zip.closeEntry();
+            }
+            zip.putNextEntry(new ZipEntry("xl/hidden.bin"));
+            zip.write(new byte[20 * 1024 * 1024]);
+            zip.closeEntry();
+        }
+        byte[] hidden = withoutCentralDirectoryEntry(out.toByteArray(), "xl/hidden.bin");
+        TableReader reader = new TableReader(1_000_000);
+
+        assertThat(hidden.length).isLessThan(1_000_000);
+        List<SheetData> sheets = reader.readXlsx(new ByteArrayInputStream(hidden));
+        assertThat(sheets).extracting(SheetData::name).containsExactly("Страны", "Регионы");
+    }
+
+    /** Убирает запись {@code name} из центрального каталога ZIP; данные элемента остаются в файле. */
+    private static byte[] withoutCentralDirectoryEntry(byte[] zip, String name) {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(zip).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        int eocd = zip.length - 22;
+        while (buffer.getInt(eocd) != 0x06054b50) eocd--;
+        int count = buffer.getShort(eocd + 10) & 0xFFFF;
+        int cdSize = buffer.getInt(eocd + 12);
+        int cdOffset = buffer.getInt(eocd + 16);
+        ByteArrayOutputStream directory = new ByteArrayOutputStream();
+        int kept = 0;
+        for (int pos = cdOffset, i = 0; i < count; i++) {
+            int nameLength = buffer.getShort(pos + 28) & 0xFFFF;
+            int length = 46 + nameLength + (buffer.getShort(pos + 30) & 0xFFFF) + (buffer.getShort(pos + 32) & 0xFFFF);
+            String entryName = new String(zip, pos + 46, nameLength, StandardCharsets.UTF_8);
+            if (!entryName.equals(name)) {
+                directory.write(zip, pos, length);
+                kept++;
+            }
+            pos += length;
+        }
+        assertThat(kept).isEqualTo(count - 1);
+        byte[] tail = java.util.Arrays.copyOfRange(zip, eocd, zip.length);
+        java.nio.ByteBuffer end = java.nio.ByteBuffer.wrap(tail).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        end.putShort(8, (short) kept).putShort(10, (short) kept).putInt(12, directory.size());
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        result.write(zip, 0, cdOffset);
+        result.writeBytes(directory.toByteArray());
+        result.writeBytes(tail);
+        assertThat(cdOffset + cdSize).isEqualTo(eocd);
+        return result.toByteArray();
     }
 
     @Test

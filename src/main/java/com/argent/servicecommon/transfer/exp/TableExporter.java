@@ -253,10 +253,14 @@ public class TableExporter {
         return escapeFormula(text);
     }
 
-    /** Префикс {@code '} для текста, который табличный редактор принял бы за формулу. */
+    /** Префикс {@code '} для текста, похожего на формулу или на уже экранированное значение ({@code '+x}). */
     static String escapeFormula(String text) {
         if (text == null || text.isEmpty()) return text == null ? "" : text;
-        return FORMULA_PREFIXES.indexOf(text.charAt(0)) >= 0 ? "'" + text : text;
+        // Значение вида «'+x» тоже получает префикс: импорт снимает ровно один «'» перед формульным символом,
+        // и без второго апострофа такое значение вернулось бы как «+x».
+        boolean looksEscaped = text.length() > 1 && text.charAt(0) == '\''
+                && FORMULA_PREFIXES.indexOf(text.charAt(1)) >= 0;
+        return looksEscaped || FORMULA_PREFIXES.indexOf(text.charAt(0)) >= 0 ? "'" + text : text;
     }
 
     /** Текстовое представление значения по типу колонки; неприводимое значение — {@code toString()}. */

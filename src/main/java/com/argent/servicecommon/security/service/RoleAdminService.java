@@ -24,8 +24,8 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * Администрирование ролей: гранты в пределах прав вызывающего (при изменении — только добавленные), системная роль
- * не удаляется и не сужается, назначенная роль не удаляется, последний активный {@code admin} не теряется.
+ * Администрирование ролей: гранты в пределах прав вызывающего (при изменении — только добавленные, при удалении —
+ * все гранты роли), системная роль не удаляется и не сужается, назначенная роль не удаляется, последний активный {@code admin} не теряется.
  */
 public class RoleAdminService {
 
@@ -103,14 +103,20 @@ public class RoleAdminService {
     /**
      * Удаляет роль.
      *
-     * @throws EntityNotFoundException если роли нет
-     * @throws IllegalStateException   если роль системная или назначена пользователям
+     * @throws EntityNotFoundException     если роли нет
+     * @throws IllegalStateException       если роль системная или назначена пользователям
+     * @throws GrantsAccessDeniedException если роль выдаёт права, которых нет у вызывающего (создать её он бы не
+     *                                     смог — значит, и удалить не может)
      */
     @Transactional
     public void delete(String code) {
         Role role = findRole(code);
         if (role.isSystem()) {
             throw new IllegalStateException("Системную роль нельзя удалить");
+        }
+        RoleGrants grants = AdminGrantsSupport.parseLenient(role.getCode(), role.getGrants());
+        if (!GrantsAuthorities.covers(support.callerGrants(), grants)) {
+            throw new GrantsAccessDeniedException("Нельзя удалить роль с правами шире собственных");
         }
         if (userRoleRepository.existsByIdRoleId(role.getId())) {
             throw new IllegalStateException("Роль назначена пользователям");

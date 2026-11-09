@@ -1,6 +1,7 @@
 package com.argent.servicecommon.error;
 
 import com.argent.servicecommon.dictionary.dynamic.exception.DynamicDictionaryNotFoundException;
+import jakarta.persistence.PersistenceException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.sql.SQLException;
 import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -109,6 +111,71 @@ class ArgentExceptionHandlerTest {
                 .andExpect(jsonPath("$.detail").value("Внутренняя ошибка сервера"));
     }
 
+    @Test
+    void shouldMapHibernateConstraintViolationTo409() throws Exception {
+        mvc.perform(get("/hib-constraint"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Конфликт данных"))
+                .andExpect(jsonPath("$.detail").value("Запись нарушает ограничение целостности базы данных."));
+    }
+
+    @Test
+    void shouldMapPersistenceExceptionWithSqlState23To409() throws Exception {
+        mvc.perform(get("/persist-23"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Запись нарушает ограничение целостности базы данных."));
+    }
+
+    @Test
+    void shouldKeepPersistenceExceptionWithOtherCauseAs500() throws Exception {
+        mvc.perform(get("/persist-other"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void shouldNotHangOnCyclicCauseChain() throws Exception {
+        // Spring сам обходит цепочку причин рекурсивно, поэтому вызываем обработчик напрямую
+        PersistenceException[] ex = new PersistenceException[2];
+        ex[0] = new PersistenceException("a") {
+            @Override
+            public synchronized Throwable getCause() {
+                return ex[1];
+            }
+        };
+        ex[1] = new PersistenceException("b") {
+            @Override
+            public synchronized Throwable getCause() {
+                return ex[0];
+            }
+        };
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(5), () ->
+                org.junit.jupiter.api.Assertions.assertEquals(500,
+                        new ArgentExceptionHandler().persistence(ex[0]).getStatus()));
+    }
+
+    @Test
+    void shouldMapJpaOptimisticLockTo409() throws Exception {
+        mvc.perform(get("/opt-jpa"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Запись изменена другим пользователем, обновите данные"));
+    }
+
+    @Test
+    void shouldMapHibernateStaleStateTo409() throws Exception {
+        mvc.perform(get("/stale-hib"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Запись изменена другим пользователем, обновите данные"));
+        mvc.perform(get("/stale-object"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldKeepEntityNotFoundAs404() throws Exception {
+        mvc.perform(get("/entity-nf"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Не найдено"));
+    }
+
     record Body(@NotBlank String name) {
     }
 
@@ -153,6 +220,43 @@ class ArgentExceptionHandlerTest {
         @GetMapping("/stale")
         String stale() {
             throw new ObjectOptimisticLockingFailureException(Object.class, 1L);
+        }
+
+        @GetMapping("/hib-constraint")
+        String hibConstraint() {
+            throw new org.hibernate.exception.ConstraintViolationException("msg",
+                    new SQLException("x", "23502"), "c");
+        }
+
+        @GetMapping("/persist-23")
+        String persist23() {
+            throw new PersistenceException("wrap", new SQLException("dup", "23505"));
+        }
+
+        @GetMapping("/persist-other")
+        String persistOther() {
+            throw new PersistenceException("wrap", new SQLException("down", "08001"));
+        }
+
+
+        @GetMapping("/opt-jpa")
+        String optJpa() {
+            throw new jakarta.persistence.OptimisticLockException("v");
+        }
+
+        @GetMapping("/stale-hib")
+        String staleHib() {
+            throw new org.hibernate.StaleStateException("v");
+        }
+
+        @GetMapping("/stale-object")
+        String staleObject() {
+            throw new org.hibernate.StaleObjectStateException("E", 1L);
+        }
+
+        @GetMapping("/entity-nf")
+        String entityNf() {
+            throw new jakarta.persistence.EntityNotFoundException("нет");
         }
 
         @GetMapping("/boom")

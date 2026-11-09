@@ -5,6 +5,7 @@ import com.argent.servicecommon.dictionary.dynamic.exception.DynamicDictionaryBa
 import com.argent.servicecommon.dictionary.dynamic.exception.DynamicDictionaryNotFoundException;
 import com.argent.servicecommon.security.exception.GrantsAccessDeniedException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.PersistenceException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +46,7 @@ public class ArgentExceptionHandler extends ResponseEntityExceptionHandler {
     private static final String BAD_REQUEST_TITLE = "Некорректный запрос";
     private static final String CONFLICT_TITLE = "Конфликт данных";
     private static final String INTERNAL_MESSAGE = "Внутренняя ошибка сервера";
+    private static final int MAX_CAUSE_DEPTH = 16;
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception,
@@ -121,8 +124,42 @@ public class ArgentExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, CONFLICT_TITLE, "Запись изменена другим пользователем, обновите данные");
     }
 
+    /** Устаревшая версия записи при прямой работе с JPA/Hibernate (без перевода Spring). */
+    @ExceptionHandler({jakarta.persistence.OptimisticLockException.class,
+            org.hibernate.StaleStateException.class})
+    public ProblemDetail optimisticLockPersistence(PersistenceException exception) {
+        return problem(HttpStatus.CONFLICT, CONFLICT_TITLE, "Запись изменена другим пользователем, обновите данные");
+    }
+
+    /**
+     * Нарушение ограничения, не переведённое Spring в {@link DataIntegrityViolationException}
+     * (код работает с {@code EntityManager} напрямую).
+     */
+    @ExceptionHandler(org.hibernate.exception.ConstraintViolationException.class)
+    public ProblemDetail hibernateConstraint(org.hibernate.exception.ConstraintViolationException exception) {
+        log.warn("Нарушение ограничения БД: {}", exception.getMessage());
+        return integrityConflict();
+    }
+
+    /** {@link PersistenceException} с {@link SQLException} класса SQLState 23 даёт конфликт, иначе 500. */
+    @ExceptionHandler(PersistenceException.class)
+    public ProblemDetail persistence(PersistenceException exception) {
+        Throwable t = exception;
+        for (int depth = 0; t != null && depth < MAX_CAUSE_DEPTH; depth++, t = t.getCause()) {
+            if (t instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().startsWith("23")) {
+                log.warn("Нарушение ограничения БД: {}", exception.getMessage());
+                return integrityConflict();
+            }
+        }
+        return internal(exception);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail conflict(DataIntegrityViolationException exception) {
+        return integrityConflict();
+    }
+
+    private static ProblemDetail integrityConflict() {
         return problem(HttpStatus.CONFLICT, CONFLICT_TITLE,
                 "Запись нарушает ограничение целостности базы данных.");
     }

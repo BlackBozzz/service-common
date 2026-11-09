@@ -93,7 +93,7 @@ argent.security.actions=orders.approve,import
 ```
 
 Ошибка в файле прерывает запуск. Пользователи заводятся под `admin`: `POST /api/users`
-(`{login, displayName, password}`; пароль 6–72 символа или позже `POST /api/users/{id}/password`), затем
+(`{login, displayName, password}`; пароль 6–72 символа, не больше 72 байт в UTF-8, или позже `POST /api/users/{id}/password`), затем
 `PUT /api/users/{id}/roles` (пример ниже). Правила — [Гранты и роли](docs/reference.md#3-гранты-и-роли).
 
 ```bash

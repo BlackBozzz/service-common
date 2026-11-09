@@ -60,8 +60,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -621,6 +624,66 @@ class DictionaryImportIntegrationTest {
         upload(tokenWith(WRITER), "imp_country", file, "countries.xlsx", "mode", "UPSERT", "keyFields", "name")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.report.errors[0].message").value("Лист не содержит данных"));
+    }
+
+    @Test
+    void shouldImportOwnXlsxExportBack() throws Exception {
+        // QA H-1: SXSSF пишет элементы ZIP с дескриптором данных; проверка распаковки должна их принимать.
+        insertCountry("Франция", 68_000_000, LocalDate.of(1958, 10, 4));
+        String token = tokenWith(WRITER);
+        byte[] exported = mvc.perform(get("/api/export/dictionaries/imp_country").param("format", "xlsx")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        upload(token, "imp_country", exported, "countries.xlsx", "mode", "UPSERT", "keyFields", "name")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updated").value(1));
+        assertThat(population("Франция")).isEqualTo(68_000_000);
+        assertThat(founded("Франция")).isEqualTo(LocalDate.of(1958, 10, 4));
+    }
+
+    @Test
+    void shouldStripFormulaApostropheOnCsvRoundTrip() throws Exception {
+        // QA M-1: экспорт CSV ставит «'» перед значениями с = + - @, импорт его снимает.
+        jdbc.update("insert into imp_country(name, code) values ('A', '+7900'), ('B', '-x'), ('C', '''quoted'), "
+                + "('D', '''+x')");
+        String token = tokenWith(WRITER);
+        byte[] exported = mvc.perform(get("/api/export/dictionaries/imp_country").param("format", "csv")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        upload(token, "imp_country", exported, "countries.csv", "mode", "UPSERT", "keyFields", "name")
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForList("select code from imp_country order by name", String.class))
+                .containsExactly("+7900", "-x", "'quoted", "'+x");
+    }
+
+    @Test
+    void shouldRejectGeneratedIdAsUpsertKey() throws Exception {
+        // QA M-3: генерируемый ID не записывается при создании — ключ по нему плодил бы дубликаты.
+        insertCountry("A", 1, null);
+        Long id = jdbc.queryForObject("select id from imp_country", Long.class);
+        byte[] file = ("Идентификатор;Название\n" + (id + 1000) + ";B\n").getBytes(StandardCharsets.UTF_8);
+
+        upload(tokenWith(WRITER), "imp_country", file, "countries.csv", "mode", "UPSERT", "keyFields", "id")
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("Поле «id» нельзя использовать как ключ")));
+        assertThat(jdbc.queryForList("select id from imp_country", Long.class)).containsExactly(id);
+    }
+
+    @Test
+    void shouldReportHugeExponentAsRowError() throws Exception {
+        // QA M-2: «1e20000000» отклоняется сразу, а не разбирается секундами.
+        byte[] file = "Название;Население\nA;1e20000000\n".getBytes(StandardCharsets.UTF_8);
+        long started = System.nanoTime();
+
+        upload(tokenWith(WRITER), "imp_country", file, "countries.csv", "mode", "REPLACE")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.report.errors[0].row").value(2))
+                .andExpect(jsonPath("$.report.errors[0].message").value("Недопустимое число: 1e20000000"));
+        assertThat((System.nanoTime() - started) / 1_000_000).isLessThan(1000);
     }
 
     private ResultActions upload(String token, String code, byte[] file, String filename, String... params)

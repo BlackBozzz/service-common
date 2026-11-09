@@ -131,7 +131,7 @@ public class UserAdminService {
     /**
      * Заменяет роли пользователя переданным набором кодов.
      *
-     * @throws ValidationErrorsException   если роль не найдена (поле {@code roleCodes})
+     * @throws ValidationErrorsException   если список ролей не передан или роль не найдена (поле {@code roleCodes})
      * @throws GrantsAccessDeniedException если права пользователя шире прав вызывающего
      *                                     или добавляемая роль выдаёт права, которых нет у вызывающего
      * @throws IllegalStateException       если вызывающий снимает с себя действие {@code admin}
@@ -139,8 +139,12 @@ public class UserAdminService {
      */
     @Transactional
     public UserDto setRoles(UUID id, UserRolesRequest request) {
+        if (request.roleCodes() == null) {
+            // Отсутствующее поле (или опечатка в имени) не должно молча снимать все роли.
+            throw new ValidationErrorsException(Map.of("roleCodes", "Укажите список ролей; пустой список снимает все роли"));
+        }
         User user = findUser(id);
-        Set<String> codes = request.roleCodes() == null ? Set.of() : new LinkedHashSet<>(request.roleCodes());
+        Set<String> codes = new LinkedHashSet<>(request.roleCodes());
         Map<UUID, Role> target = new LinkedHashMap<>();
         for (String code : codes) {
             Role role = roleRepository.findByCode(code).orElseThrow(() ->

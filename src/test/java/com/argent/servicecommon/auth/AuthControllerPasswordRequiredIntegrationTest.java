@@ -91,6 +91,26 @@ class AuthControllerPasswordRequiredIntegrationTest {
     }
 
     @Test
+    void shouldRejectRegistrationPasswordOver72Utf8Bytes() throws Exception {
+        // QA auth #3: 40 кириллических символов проходят @Size(max = 72), но занимают 80 байт.
+        String body = "{\"login\":\"newbie\",\"displayName\":\"Новичок\",\"password\":\"" + "п".repeat(40) + "\"}";
+
+        mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("password"))
+                .andExpect(jsonPath("$.errors[0].message").value("Пароль не должен превышать 72 байта в UTF-8"));
+        assertThat(userRepository.findByLogin("newbie")).isEmpty();
+    }
+
+    @Test
+    void loginIsCaseSensitive() throws Exception {
+        // QA auth #1: так задумано — «Admin» и «admin» разные логины.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"login\":\"Admin\",\"password\":\"secret123\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void shouldFailStartWithoutAdminPassword() {
         Map<String, Object> properties = new LinkedHashMap<>();
         SecurityTestContainer.register((name, value) -> properties.put(name, value.get()), "it_auth_nopwd");

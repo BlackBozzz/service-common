@@ -71,7 +71,7 @@ CREATE TABLE common_audit_entry
 (
     id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_type VARCHAR(255) NOT NULL,
-    entity_id   VARCHAR(255),
+    entity_id   TEXT,
     action      VARCHAR(10)  NOT NULL,
     field       VARCHAR(255),
     old_value   TEXT,

@@ -1,9 +1,16 @@
 package com.argent.servicecommon.audit;
 
+import com.argent.servicecommon.audit.audfixture.AudAddress;
+import com.argent.servicecommon.audit.audfixture.AudLocation;
+import com.argent.servicecommon.audit.audfixture.AudLongId;
 import com.argent.servicecommon.audit.audfixture.AudNoTable;
 import com.argent.servicecommon.audit.audfixture.AudOrder;
 import com.argent.servicecommon.audit.audfixture.AudPlain;
+import com.argent.servicecommon.audit.audfixture.AudPlace;
+import com.argent.servicecommon.audit.audfixture.AudPoint;
 import com.argent.servicecommon.audit.audfixture.AudRegion;
+import com.argent.servicecommon.audit.audfixture.AudSecret;
+import com.argent.servicecommon.audit.audfixture.AudUpper;
 import com.argent.servicecommon.audit.entity.AuditEntry;
 import com.argent.servicecommon.audit.repository.AuditEntryRepository;
 import com.argent.servicecommon.auth.entity.User;
@@ -95,6 +102,14 @@ class AuditIntegrationTest {
                 + "version bigint)");
         jdbc.execute("create table if not exists aud_plain (id uuid primary key, name varchar(255))");
         jdbc.execute("create table if not exists aud_no_table (id uuid primary key, name varchar(255))");
+        jdbc.execute("create table if not exists aud_place (id uuid primary key, name varchar(255), "
+                + "city varchar(255), pin varchar(255), region_id bigint references aud_region(id), "
+                + "code varchar(255), label varchar(255), lat double precision, lon double precision)");
+        jdbc.execute("create table if not exists aud_long_id (id text primary key, name varchar(255))");
+        jdbc.execute("create table if not exists aud_upper (id uuid primary key, name varchar(255))");
+        jdbc.update("delete from aud_place");
+        jdbc.update("delete from aud_long_id");
+        jdbc.update("delete from aud_upper");
         jdbc.update("delete from aud_no_table");
         jdbc.update("delete from aud_order");
         jdbc.update("delete from aud_region");
@@ -192,6 +207,98 @@ class AuditIntegrationTest {
                 .containsExactly(tuple("secret", "***", "***"));
         assertThat(entries()).noneMatch(entry -> String.valueOf(entry.getOldValue()).contains("пароль")
                 || String.valueOf(entry.getNewValue()).contains("пароль"));
+    }
+
+    @Test
+    void shouldExpandEmbeddedAndMaskIgnoredSubfield() {
+        // QA audit #1: @AuditIgnore внутри @Embeddable; toString() встроенного объекта в журнал не попадает.
+        UUID id = tx.execute(status -> {
+            AudPlace place = new AudPlace();
+            place.setName("Склад");
+            place.setAddress(new AudAddress("Тула", "PIN-1"));
+            entityManager.persist(place);
+            return place.getId();
+        });
+        tx.executeWithoutResult(status ->
+                entityManager.find(AudPlace.class, id).setAddress(new AudAddress("Москва", "PIN-2")));
+
+        assertThat(entries()).filteredOn(entry -> entry.getAction().equals("UPDATE"))
+                .extracting(AuditEntry::getField, AuditEntry::getOldValue, AuditEntry::getNewValue)
+                .containsExactlyInAnyOrder(tuple("address.city", "Тула", "Москва"),
+                        tuple("address.pin", "***", "***"));
+        assertThat(entries()).noneMatch(entry -> String.valueOf(entry.getOldValue()).contains("PIN")
+                || String.valueOf(entry.getNewValue()).contains("PIN"));
+
+        tx.executeWithoutResult(status -> entityManager.find(AudPlace.class, id).setAddress(null));
+        assertThat(entries()).filteredOn(entry -> entry.getAction().equals("UPDATE"))
+                .extracting(AuditEntry::getField, AuditEntry::getOldValue, AuditEntry::getNewValue)
+                .containsExactlyInAnyOrder(tuple("address.city", "Тула", "Москва"),
+                        tuple("address.pin", "***", "***"), tuple("address.city", "Москва", null),
+                        tuple("address.pin", "***", "***"));
+    }
+
+    @Test
+    void shouldMaskWholeIgnoredEmbeddedAndExpandNestedAndReferences() {
+        Long north = createRegion("Север");
+        Long south = createRegion("Юг");
+        UUID id = tx.execute(status -> {
+            AudPlace place = new AudPlace();
+            place.setName("Склад");
+            place.setAddress(new AudAddress("Тула", "PIN-1", entityManager.find(AudRegion.class, north)));
+            place.setSecret(new AudSecret("CODE-1"));
+            place.setLocation(new AudLocation("центр", new AudPoint(1.0, 2.0)));
+            entityManager.persist(place);
+            return place.getId();
+        });
+        tx.executeWithoutResult(status -> {
+            AudPlace place = entityManager.find(AudPlace.class, id);
+            // Ссылка внутри встроенного объекта пишется как id; @AuditIgnore на всём @Embedded скрывает подполя;
+            // вложенный встроенный объект раскладывается до a.b.c.
+            place.setAddress(new AudAddress("Тула", "PIN-1", entityManager.find(AudRegion.class, south)));
+            place.setSecret(new AudSecret("CODE-2"));
+            place.setLocation(new AudLocation("центр", new AudPoint(1.0, 3.5)));
+        });
+
+        assertThat(entries()).filteredOn(entry -> entry.getAction().equals("UPDATE"))
+                .extracting(AuditEntry::getField, AuditEntry::getOldValue, AuditEntry::getNewValue)
+                .containsExactlyInAnyOrder(
+                        tuple("address.region", north.toString(), south.toString()),
+                        tuple("secret.code", "***", "***"),
+                        tuple("location.point.lon", "2.0", "3.5"));
+        assertThat(entries()).noneMatch(entry -> String.valueOf(entry.getOldValue()).contains("CODE")
+                || String.valueOf(entry.getNewValue()).contains("CODE"));
+    }
+
+    @Test
+    void shouldAuditStringIdLongerThan255() {
+        // QA audit #2: entity_id — text; длинный ключ не ломает бизнес-запись.
+        String longId = "k".repeat(300);
+        tx.executeWithoutResult(status -> {
+            AudLongId entity = new AudLongId();
+            entity.setId(longId);
+            entity.setName("v");
+            entityManager.persist(entity);
+        });
+
+        assertThat(entries()).extracting(AuditEntry::getEntityType, AuditEntry::getEntityId, AuditEntry::getAction)
+                .containsExactly(tuple("aud_long_id", longId, "INSERT"));
+    }
+
+    @Test
+    void shouldUsePhysicalTableNameForCamelCaseTableAnnotation() throws Exception {
+        // QA audit #3: @Table(name = "AudUpper") → таблица aud_upper; журнал читается через REST.
+        tx.executeWithoutResult(status -> {
+            AudUpper entity = new AudUpper();
+            entity.setName("u");
+            entityManager.persist(entity);
+        });
+
+        assertThat(entries()).extracting(AuditEntry::getEntityType).containsExactly("aud_upper");
+        String reader = tokenWith("{\"tables\":{\"aud_upper\":[\"read\"]}}");
+        mvc.perform(get("/api/audit").param("entityType", "aud_upper")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(1)));
     }
 
     @Test

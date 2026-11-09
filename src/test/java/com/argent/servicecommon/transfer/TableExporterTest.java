@@ -138,7 +138,9 @@ class TableExporterTest {
                 Map.of("value", "@SUM(A1)", "amount", 0),
                 Map.of("value", "\tcmd", "amount", 0),
                 Map.of("value", "\rcmd", "amount", 0),
-                Map.of("value", "обычный текст", "amount", 0));
+                Map.of("value", "обычный текст", "amount", 0),
+                Map.of("value", "'+x", "amount", 0),
+                Map.of("value", "'текст", "amount", 0));
 
         String text = new String(exporter.toCsv(new TableData("Инъекции", columns, rows)), StandardCharsets.UTF_8)
                 .substring(1);
@@ -154,6 +156,9 @@ class TableExporterTest {
         assertThat(records.get(5).get(0)).isEqualTo("'\tcmd");
         assertThat(records.get(6).get(0)).isEqualTo("'\rcmd");
         assertThat(records.get(7).get(0)).isEqualTo("обычный текст");
+        // Значение, которое само выглядит как экранированное, экранируется ещё раз: импорт снимет ровно один «'».
+        assertThat(records.get(8).get(0)).isEqualTo("''+x");
+        assertThat(records.get(9).get(0)).isEqualTo("'текст");
     }
 
     @Test

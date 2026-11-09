@@ -407,6 +407,17 @@ public class DictionaryImportService {
             columns.add(new Column(header, field, property.type()));
         }
 
+        String idField = schema.idField();
+        boolean generatedId = DictionaryProperties.hasGeneratedId(entityClass, idField);
+        Map<String, Integer> order = new HashMap<>();
+        int index = 0;
+        for (String name : fields.keySet()) {
+            order.put(name, index++);
+        }
+        Map<String, Boolean> readOnly = new HashMap<>();
+        fields.values().forEach(field -> readOnly.put(field.name(), field.readOnly()
+                || dtoProperties.containsKey(field.name()) && dtoProperties.get(field.name()).readOnly()));
+
         List<String> keyFields = List.of();
         List<String> scalarKeys = new ArrayList<>();
         List<DynamicFieldDefinition> referenceKeys = new ArrayList<>();
@@ -422,6 +433,11 @@ public class DictionaryImportService {
                     throw new IllegalArgumentException(explicit
                             ? "Поле не найдено в справочнике: " + key : KEY_FIELDS_REQUIRED);
                 }
+                // Ключ, который не записывается при создании (генерируемый ID, поле только для чтения), никогда
+                // не совпадёт с созданной записью: повторная загрузка плодила бы дубликаты.
+                if (Boolean.TRUE.equals(readOnly.get(key)) || key.equals(idField) && generatedId) {
+                    throw new IllegalArgumentException("Поле «" + key + "» нельзя использовать как ключ");
+                }
                 if (columns.stream().noneMatch(column -> column.field().name().equals(key))) {
                     throw new IllegalArgumentException("Ключевое поле не сопоставлено с колонкой: " + key);
                 }
@@ -435,16 +451,6 @@ public class DictionaryImportService {
                 }
             }
         }
-        String idField = schema.idField();
-        boolean generatedId = DictionaryProperties.hasGeneratedId(entityClass, idField);
-        Map<String, Integer> order = new HashMap<>();
-        int index = 0;
-        for (String name : fields.keySet()) {
-            order.put(name, index++);
-        }
-        Map<String, Boolean> readOnly = new HashMap<>();
-        fields.values().forEach(field -> readOnly.put(field.name(), field.readOnly()
-                || dtoProperties.containsKey(field.name()) && dtoProperties.get(field.name()).readOnly()));
         return new Plan(columns, unmapped, List.copyOf(keyFields), scalarKeys, referenceKeys, entityClass,
                 dictionary.dtoClass(), idField, generatedId, order, readOnly);
     }

@@ -26,6 +26,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Строка ячейки → значение типа поля DTO (русская и английская запись чисел, да/нет, дд.мм.гггг и ISO, enum, ссылка
@@ -35,6 +37,10 @@ public class ValueConverter {
 
     private static final int OPTIONS_PAGE_SIZE = 100;
     private static final int MAX_SEARCH_LENGTH = 200;
+    private static final int MAX_NUMBER_LENGTH = 40;
+    private static final int MAX_EXPONENT = 6;
+    private static final String INVALID_NUMBER = "Недопустимое число: ";
+    private static final Pattern EXPONENT = Pattern.compile("[eE][+-]?(\\d+)");
     private static final DateTimeFormatter RU_DATE =
             DateTimeFormatter.ofPattern("d.M.uuuu").withResolverStyle(ResolverStyle.STRICT);
     private static final DateTimeFormatter RU_DATE_TIME =
@@ -156,6 +162,7 @@ public class ValueConverter {
 
     private static BigDecimal number(String value, boolean integer) {
         String text = value.replaceAll("[\\s\\u00A0\\u2007\\u202F']", "");
+        requireSaneNumber(text, value);
         int comma = text.lastIndexOf(',');
         int dot = text.lastIndexOf('.');
         if (comma >= 0 && dot >= 0) {
@@ -172,6 +179,24 @@ public class ValueConverter {
             return new BigDecimal(text);
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Некорректное число: " + value);
+        }
+    }
+
+    /**
+     * Защита от чисел, разбор и преобразование которых занимает секунды и сотни мегабайт ({@code 1e20000000}):
+     * не длиннее {@value #MAX_NUMBER_LENGTH} символов, показатель степени по модулю не больше
+     * {@value #MAX_EXPONENT}.
+     */
+    private static void requireSaneNumber(String text, String value) {
+        if (text.length() > MAX_NUMBER_LENGTH) {
+            throw new IllegalArgumentException(INVALID_NUMBER + value);
+        }
+        Matcher exponent = EXPONENT.matcher(text);
+        if (exponent.find()) {
+            String digits = exponent.group(1).replaceFirst("^0+(?=\\d)", "");
+            if (digits.length() > 2 || Integer.parseInt(digits) > MAX_EXPONENT) {
+                throw new IllegalArgumentException(INVALID_NUMBER + value);
+            }
         }
     }
 
