@@ -19,3 +19,4 @@ CREATE SCHEMA IF NOT EXISTS it_import_nosec;
 CREATE SCHEMA IF NOT EXISTS it_explore_auth;
 CREATE SCHEMA IF NOT EXISTS it_explore_audit;
 CREATE SCHEMA IF NOT EXISTS it_explore_transfer;
+CREATE SCHEMA IF NOT EXISTS it_report;

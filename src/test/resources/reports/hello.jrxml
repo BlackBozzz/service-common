@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="hello" pageWidth="595" pageHeight="842" columnWidth="515" leftMargin="40" rightMargin="40" topMargin="50" bottomMargin="50">
+    <parameter name="title" class="java.lang.String"/>
+    <field name="name" class="java.lang.String"/>
+    <field name="amount" class="java.math.BigDecimal"/>
+    <field name="createdAt" class="java.util.Date"/>
+    <variable name="sum" class="java.math.BigDecimal" calculation="Sum">
+        <expression><![CDATA[$F{amount}]]></expression>
+    </variable>
+    <title height="50">
+        <element kind="staticText" x="0" y="0" width="515" height="20" fontName="DejaVu Sans">
+            <text><![CDATA[Отчёт]]></text>
+        </element>
+        <element kind="textField" x="0" y="25" width="515" height="20" fontName="DejaVu Sans">
+            <expression><![CDATA[$P{title}]]></expression>
+        </element>
+    </title>
+    <detail>
+        <band height="20">
+            <element kind="textField" x="0" y="0" width="255" height="20" fontName="DejaVu Sans">
+                <expression><![CDATA[$F{name}]]></expression>
+            </element>
+            <element kind="textField" x="255" y="0" width="130" height="20" fontName="DejaVu Sans">
+                <expression><![CDATA[$F{amount}]]></expression>
+            </element>
+            <element kind="textField" x="385" y="0" width="130" height="20" fontName="DejaVu Sans" pattern="dd.MM.yyyy">
+                <expression><![CDATA[$F{createdAt}]]></expression>
+            </element>
+        </band>
+    </detail>
+    <summary height="20">
+        <element kind="textField" x="0" y="0" width="515" height="20" fontName="DejaVu Sans">
+            <expression><![CDATA["Итого: " + $V{sum}]]></expression>
+        </element>
+    </summary>
+</jasperReport>

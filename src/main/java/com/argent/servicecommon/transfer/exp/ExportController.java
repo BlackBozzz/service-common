@@ -1,5 +1,6 @@
 package com.argent.servicecommon.transfer.exp;
 
+import com.argent.servicecommon.util.FileNames;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -77,11 +78,6 @@ public class ExportController {
 
     /** Имя файла из заголовка: без символов, запрещённых в именах файлов, не длиннее 100 символов. */
     public static String fileName(String title) {
-        String cleaned = title == null ? "" : title.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").strip();
-        if (cleaned.length() > 100) {
-            int end = Character.isHighSurrogate(cleaned.charAt(99)) ? 99 : 100;
-            cleaned = cleaned.substring(0, end).strip();
-        }
-        return cleaned.isEmpty() || cleaned.chars().allMatch(ch -> ch == '.') ? "export" : cleaned;
+        return FileNames.sanitize(title, "export");
     }
 }

@@ -19,6 +19,7 @@
 | [12. Замена бинов](#12-замена-бинов) | `@ConditionalOnMissingBean`, особые случаи |
 | [13. Для существующих приложений](#13-для-существующих-приложений) | что меняют этапы 2 и 3 |
 | [14. Тесты](#14-тесты) | Testcontainers |
+| [15. Отчёты (JasperReports)](#15-отчёты-jasperreports) | `ReportService`, `ReportRequest`, `argent.reports.*`, источники данных, форматы, подводные камни |
 
 Состав библиотеки:
 
@@ -71,6 +72,7 @@ Flyway, JPA, Validation и springdoc приходят транзитивно.
 |---|---|
 | Библиотеки импорта и экспорта | транзитивно Apache POI (`poi-ooxml` 5.5.1 — XLSX и DOCX) и Apache Commons CSV 1.14.1; отдельно подключать их в приложении не нужно |
 | Площадка без интернета | заранее прогрейте `~/.m2`: соберите и установите библиотеку (`./mvnw install -DskipTests`) и один раз соберите каждое приложение, которое её подключает, — тогда все зависимости, включая POI и commons-csv, окажутся в `~/.m2` |
+| JasperReports | транзитивно четыре артефакта `net.sf.jasperreports` 7.0.8: `jasperreports` (ядро), `jasperreports-pdf` (экспорт в PDF на OpenPDF), `jasperreports-fonts` (шрифты DejaVu), `jasperreports-jdt` (компилятор выражений ecj). Лицензии: JasperReports — LGPL, OpenPDF — LGPL/MPL, шрифты DejaVu — свободная лицензия шрифтов DejaVu. Отдельно подключать не нужно |
 | Версия | не меняется (`0.0.1-SNAPSHOT`): `install` новой сборки заменяет в `~/.m2` предыдущую |
 
 ### Flyway
@@ -1372,12 +1374,14 @@ public void delete(Long id) {
 |---|---|---|
 | 400 | Ошибка валидации | Bean Validation тела или параметров, `ValidationErrorsException` (есть `errors`), в том числе ошибки грантов |
 | 400 | Некорректный запрос | неразбираемый JSON, неверный тип параметра, `IllegalArgumentException` (текст в `detail`: например, «Укажите entityType», `Тип файла не разрешён: <тип>`), превышение лимита multipart |
+| 400 | Некорректный запрос | `ReportParameterException` (наследник `IllegalArgumentException`): неизвестный или неприводимый параметр отчёта, `data(...)` для шаблона с SQL, неизвестный формат; текст — в `detail` |
 | 400 | Ошибка импорта | импорт листа отменён (`ImportFailedException`); отчёт — в свойстве `report` |
 | 401 | Требуется вход | нет токена или он недействителен; при неудачном входе `detail` — причина |
 | 403 | Недостаточно прав | нет права; `detail` общий, кроме «Регистрация отключена», отказов правил администрирования, запрета перехода статуса («Для перехода требуется действие …») и удаления вложения без `write` (`Нет права записи в таблицу <таблица>`) |
 | 404 | Не найдено | `EntityNotFoundException` (пользователь, роль, статус, счётчик, вложение — в том числе скачивание вложения без `read`), `DynamicDictionaryNotFoundException` (справочник) |
 | 409 | Конфликт данных | `IllegalStateException` (текст в `detail`), нарушение ограничения БД (общий текст), в том числе `org.hibernate.exception.ConstraintViolationException` и `PersistenceException` с `SQLException` SQLState `23xxx` при прямой работе с `EntityManager` |
 | 409 | Конфликт данных | `OptimisticLockingFailureException` (в том числе `ObjectOptimisticLockingFailureException` при устаревшем `@Version`) — «Запись изменена другим пользователем, обновите данные» |
+| 500 | Внутренняя ошибка сервера | `ReportTemplateException` (шаблон не найден или не компилируется) и `ReportRenderException` (ошибка SQL, таймаут, нет `DataSource`, нет свойства в строках отчёта); подробности только в журнале |
 | 500 | Внутренняя ошибка сервера | всё прочее; подробности только в журнале |
 
 Ошибки контроллеров справочников может формировать собственный обработчик модуля справочников
@@ -1492,3 +1496,146 @@ CommonSequenceRepository.class, AuditEntryRepository.class, AttachmentRepository
 Тесты библиотеки делят один контейнер `SecurityTestContainer`; схема на класс теста добавляется в
 `src/test/resources/db/security-test-init.sql`. `SecurityTestContainer` задаёт `argent.attachments.root`
 во временной папке (`java.io.tmpdir`), а не в `./data/attachments`.
+
+---
+
+## 15. Отчёты (JasperReports)
+
+Печатные формы PDF, XLSX и DOCX по шаблонам JRXML. Весь публичный API — пакет `com.argent.servicecommon.report`,
+классов Jasper в сигнатурах нет. Быстрый старт — [README](../README.md#печатные-формы-jasperreports).
+Образцы шаблонов формата 7.0 — `main-backend/src/main/resources/reports/*.jrxml`.
+
+### Подключение и свойства
+
+Автоконфигурация `ReportAutoConfiguration` создаёт `ReportService` (внедряйте его в контроллеры и сервисы),
+кэш шаблонов и собственный контекст Jasper; все бины заменяются своими (`@ConditionalOnMissingBean`).
+Свойства `argent.reports.*` (неверное значение останавливает запуск):
+
+| Свойство | По умолчанию | Смысл |
+|---|---|---|
+| `argent.reports.preload` | пусто | список путей и масок (`classpath*:reports/*.jrxml`), компилируются при старте; ошибка в шаблоне останавливает запуск |
+| `argent.reports.max-rows` | `100000` | предел строк отчёта (`REPORT_MAX_COUNT`); больше нуля |
+| `argent.reports.query-timeout` | `60s` | таймаут SQL-запроса шаблона (`Duration`, округляется вверх до секунд); больше нуля |
+| `argent.reports.locale` | `ru-RU` | локаль отчёта, если не задана через `ReportRequest.locale(...)` |
+| `argent.reports.default-font` | `DejaVu Sans` | шрифт по умолчанию, в том числе для PDF (должен содержать кириллицу) |
+| `argent.reports.watch-files` | `true` | перекомпилировать шаблоны из файловой системы при изменении даты файла; `false` — компилировать один раз |
+
+### `ReportRequest`
+
+Неизменяемый построитель; каждый метод возвращает новый объект.
+
+| Метод | Назначение |
+|---|---|
+| `ReportRequest.template(String)` / `template(Resource)` | шаблон; обязателен |
+| `data(Collection<?>)` | строки секции `detail` (только для шаблонов без SQL) |
+| `param(String, Object)` / `params(Map<String, ?>)` | параметры; имя должно быть объявлено в шаблоне |
+| `fileName(String)` | имя файла без расширения; по умолчанию имя шаблона |
+| `locale(Locale)` | локаль отчёта; по умолчанию `argent.reports.locale` |
+| `format(ReportFormat)` | формат, обязателен |
+
+`ReportService.render(request)` возвращает `ReportFile`. Местоположение шаблона — в нотации `ResourceLoader`:
+`classpath:…`, `file:…`; путь без префикса считается `file:`; относительный `file:./reports/x.jrxml` — от рабочей
+папки приложения (как `argent.attachments.root`). Маска `classpath*:` допустима только в `preload`.
+Принимаются только `classpath:` и `file:`: строка `https://…` считается путём к файлу и даёт «не найден».
+Шаблон задаётся только из кода или настроек, никогда из параметров запроса клиента: иначе клиент сможет читать
+произвольные файлы сервера (`file:`).
+Шаблоны с `classpath:` компилируются один раз; при `watch-files=true` шаблон из файла на диске
+перекомпилируется, когда изменилась дата файла.
+
+### Источник данных
+
+Правила выбора источника строк, по порядку:
+
+1. В шаблоне есть непустой SQL (`<query language="sql">`): отчёт сам читает БД. Соединение берётся через
+   `DataSourceUtils`, поэтому вызов из `@Transactional` идёт по соединению вашей транзакции, видит её изменения и
+   не занимает второе соединение пула; вне транзакции берётся соединение пула и возвращается после заполнения.
+   На запросы ставятся `setQueryTimeout(argent.reports.query-timeout)` и `setMaxRows(max-rows + 1)`.
+   Передача `data(...)` в такой шаблон — `ReportParameterException`. Нет `DataSource` — `ReportRenderException`.
+2. Передан `data(rows)`: строки из коллекции (см. «DTO как строки»).
+3. Иначе одна пустая строка: отчёт строится только из параметров (шапка, таблицы из коллекций-параметров).
+
+Схема БД не настраивается: используется `DataSource` приложения. `REPORT_MAX_COUNT = max-rows` обрезает строки:
+для пути DTO обрезка пишется в журнал на WARN, для SQL проходит молча (отчёт лучше неполный, чем никакой).
+
+### Параметры и приведение типов
+
+Неизвестное имя параметра — `ReportParameterException`. Значение приводится к классу, объявленному в
+`<parameter class="…">`; совпадающий или присваиваемый тип передаётся как есть, `null` остаётся `null`.
+
+| Из | В | Как |
+|---|---|---|
+| любое значение | `String` | `String.valueOf` |
+| `String`, любое число | `Integer`, `Long`, `Short`, `BigInteger`, `BigDecimal`, `Double`, `Float` | через `BigDecimal`; дробь в целое или переполнение (в том числе бесконечность для `Double`/`Float`) — ошибка |
+| `String` | `Boolean` | `true`/`да`/`1`, `false`/`нет`/`0` без учёта регистра |
+| `String` | `UUID`, enum | разбор; enum — по имени без учёта регистра |
+| `String` | `LocalDate`, `LocalDateTime`, `Instant` | ISO или `дд.мм.гггг` / `дд.мм.гггг чч:мм[:сс]`; `Instant` — только ISO |
+| `LocalDate`, `LocalDateTime`, `java.util.Date` (и `java.sql.Date`, `Timestamp`) | `LocalDate`, `LocalDateTime` | `LocalDate` ↔ `LocalDateTime` и из `Date`-типов; `LocalDateTime` → `LocalDate` отбрасывает время, `LocalDate` → `LocalDateTime` даёт начало суток; системная зона |
+| `LocalDate`, `LocalDateTime`, `Date`-типы | `Instant` | системная зона |
+| `Instant` | `LocalDate`, `LocalDateTime` | системная зона; в `LocalDate` время отбрасывается |
+| `Instant`, `LocalDate`, `LocalDateTime`, `Date`-типы | `java.util.Date`, `java.sql.Date`, `Timestamp` | системная зона; `LocalDate` даёт начало суток |
+| `String` | `java.util.Date`, `java.sql.Date`, `Timestamp` | дата или дата со временем в тех же форматах |
+
+Иное приведение — `ReportParameterException` с именем параметра («Параметр "x": Значение типа A не приводится к B»).
+Параметр, объявленный как `net.sf.jasperreports.engine.JRDataSource`, принимает `Collection` или массив
+(оборачивается тем же источником, что и `data`): так список позиций подаётся в компонент «таблица» или подотчёт
+выражением `$P{items}`. Параметр типа `Collection`/`List` передаётся как есть (для `$X{IN, …}` в SQL).
+Системные параметры задаёт библиотека: `REPORT_LOCALE`, `REPORT_TIME_ZONE` (системная), `REPORT_MAX_COUNT`.
+
+### DTO как строки
+
+Стандартный источник Jasper не видит компоненты записей (`x()`), поэтому строки читает собственный `ArgentBeanDataSource`:
+запись — компонент по имени; обычный класс — `getX()`/`isX()`, затем публичное поле; `Map` — по ключу. Имя поля
+с точкой (`customer.name`) — путь по вложенным объектам, `null` на любом шаге даёт `null`. Свойства, которого нет, —
+`ReportRenderException`: «В строках отчёта нет свойства "x" (класс Y)» (проверяется при первом чтении поля).
+Значение приводится к классу `<field class="…">` по таблице выше. Источник можно перечитать с начала (подотчёты).
+
+### Форматы и `ReportFile`
+
+| `ReportFormat` | Расширение | Тип содержимого |
+|---|---|---|
+| `PDF` | `pdf` | `application/pdf` |
+| `XLSX` | `xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` |
+| `DOCX` | `docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
+
+`ReportFormat.parse(String)` разбирает формат без учёта регистра; неизвестный или `null` — `IllegalArgumentException`
+со списком допустимых (в HTTP — 400). `ReportFile` — запись `(byte[] content, ReportFormat format, String fileName)`,
+имя уже с расширением и очищено от запрещённых символов. `toResponseEntity()` даёт ответ 200 с типом формата, длиной,
+`Content-Disposition: attachment` (имя в UTF-8) и `X-Content-Type-Options: nosniff`. Имя листа Excel — имя
+файла без символов `[]:*?/\`, не длиннее 31 символа.
+
+### Ошибки
+
+| Исключение | HTTP | Когда |
+|---|---|---|
+| `ReportParameterException` (`IllegalArgumentException`) | 400 | неизвестный параметр, неприводимое значение, `data(...)` для шаблона с SQL, не задан шаблон или формат |
+| `ReportTemplateException` (`ReportException`) | 500 | шаблон не найден, не читается или не компилируется; при `preload` — ошибка запуска |
+| `ReportRenderException` (`ReportException`) | 500 | ошибка SQL (сообщение «Ошибка SQL в отчёте <шаблон> [SQLState <код>]: <текст драйвера>», без самого запроса; таймаут — «… [SQLState 57014]: превышен таймаут N с»), нет `DataSource`, нет свойства в строках, неприводимое значение поля |
+
+Для 500 клиент получает общий ответ, причина — в журнале бэкенда.
+
+### Подводные камни
+
+- **Записи и геттеры.** Работают оба вида DTO (см. выше); поле шаблона должно называться как компонент записи или свойство.
+- **Шрифты.** Во всех текстовых элементах шаблона — `DejaVu Sans` (он встроен и содержит кириллицу). Другой шрифт
+  (например, Arial) не роняет отчёт: из-за `net.sf.jasperreports.awt.ignore.missing.font=true` подставляется шрифт по умолчанию.
+- **`java.util.Date` в SQL-шаблонах.** Параметры дат в SQL-шаблонах Studio объявляет как `java.util.Date`; библиотека
+  приводит к нему `LocalDate`, `LocalDateTime`, `Instant` и строки. Верхнюю границу периода берите включительно:
+  передавайте `to.plusDays(1)` и сравнивайте `< $P{to}`.
+- **Studio 7.1 и ядро 7.0.** Библиотека использует JasperReports 7.0.8. Файл, сохранённый Studio 7.1, может не открыться;
+  рисуйте в Studio 7.0.x. Формат JRXML 7.0: высота `<title>` и `<summary>` задаётся атрибутом `height`, `<band>` бывает только
+  внутри `<detail>`; запрос — `<query language="sql">`; элементы — `<element kind="textField|staticText">`; таблица — компонент с `<dataset>`.
+- **`whenNoDataType`.** Если шаблон его не задал, библиотека ставит `AllSectionsNoDetail`: при отсутствии строк отчёт
+  получает шапку и итоги вместо пустого файла.
+- **Выражения в шаблонах.** Их компилирует ecj 3.21 (синтаксис Java 8): без `record` и `switch`-выражений внутри выражений.
+  Если параметр объявлен строкой, любое переданное значение приводится через `String.valueOf`.
+- **Jackson 2 внутри Jasper и согласование контента.** Jasper 7 тянет Jackson 2 XML; Spring MVC в этом случае начинает
+  отвечать XML на браузерный `Accept` (`application/xhtml+xml`). Поэтому автоконфигурация во всех приложениях библиотеки
+  убирает из Spring MVC XML-конвертеры Jackson 2 (`MappingJackson2XmlHttpMessageConverter`); конвертеры Jackson 3 не
+  трогаются. Удаление идёт по имени класса конвертера (содержит `Jackson2Xml`) и не настраивается: XML на Jackson 2
+  в приложениях с этой библиотекой недоступен, XML на Jackson 3 остаётся доступным. После добавления зависимостей,
+  тянущих Jackson XML, проверьте JSON-эндпоинты браузерным `Accept`.
+- **`$P!{…}` в SQL.** Это текстовая подстановка в запрос в обход типизированной привязки (и риск SQL-инъекции);
+  для значений используйте `$P{…}`.
+- **Транзакция.** SQL-шаблон выполняется в транзакции вызывающего кода; `readOnly` на соединении библиотека не меняет.
+- **Лицензии.** JasperReports — LGPL, OpenPDF (PDF) — LGPL/MPL, шрифты DejaVu — свободная лицензия. Библиотеки подключаются
+  как зависимости без изменения исходников.

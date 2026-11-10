@@ -19,6 +19,11 @@
       "name": "argent.attachments",
       "type": "com.argent.servicecommon.attachment.AttachmentProperties",
       "description": "Вложения: папка хранилища, наибольший размер файла и разрешённые типы."
+    },
+    {
+      "name": "argent.reports",
+      "type": "com.argent.servicecommon.report.ReportProperties",
+      "description": "Печать отчётов JasperReports: предзагрузка шаблонов, лимиты, локаль и шрифт."
     }
   ],
   "properties": [
@@ -153,6 +158,42 @@
       "type": "java.util.List<java.lang.String>",
       "description": "Разрешённые MIME-типы или префиксы (image/); пусто — любые, кроме блок-листа (HTML, SVG, *+xml, скрипты, исполняемые).",
       "defaultValue": []
+    },
+    {
+      "name": "argent.reports.preload",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Маски шаблонов JRXML для компиляции при запуске (classpath*:reports/*.jrxml); ошибка в шаблоне прерывает запуск.",
+      "defaultValue": []
+    },
+    {
+      "name": "argent.reports.max-rows",
+      "type": "java.lang.Integer",
+      "description": "Наибольшее число строк отчёта; лишние отбрасываются. Должно быть больше нуля.",
+      "defaultValue": 100000
+    },
+    {
+      "name": "argent.reports.query-timeout",
+      "type": "java.time.Duration",
+      "description": "Таймаут SQL-запроса шаблона; должен быть больше нуля.",
+      "defaultValue": "60s"
+    },
+    {
+      "name": "argent.reports.locale",
+      "type": "java.util.Locale",
+      "description": "Локаль отчётов по умолчанию (числа, даты).",
+      "defaultValue": "ru-RU"
+    },
+    {
+      "name": "argent.reports.default-font",
+      "type": "java.lang.String",
+      "description": "Шрифт по умолчанию с поддержкой кириллицы.",
+      "defaultValue": "DejaVu Sans"
+    },
+    {
+      "name": "argent.reports.watch-files",
+      "type": "java.lang.Boolean",
+      "description": "Перекомпилировать шаблоны из файловой системы при изменении файла.",
+      "defaultValue": true
     }
   ],
   "hints": [

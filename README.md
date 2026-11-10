@@ -233,6 +233,34 @@ curl -s "$H/api/export/dictionaries/orders?format=xlsx" -H "Authorization: Beare
 
 Проверка: импорт отвечает `{"total":…,"created":…,"updated":…,"failed":0,"errors":[]}`.
 
+### Печатные формы (JasperReports)
+
+Шаблон рисуется в Jasper Studio 7.0.x (файл, сохранённый в Studio 7.1, может не открыться ядром 7.0), в элементах — шрифт `DejaVu Sans`
+(с кириллицей). Файл `.jrxml` — в `src/main/resources/reports`; в `application.properties`:
+`argent.reports.preload=classpath*:reports/*.jrxml` (шаблоны компилируются при старте, ошибка в шаблоне останавливает запуск).
+
+```java
+@GetMapping("/report")
+@PreAuthorize("@argentAccess.table('dict_demo_order', 'read')")
+public ResponseEntity<byte[]> report(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                                     @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+                                     @RequestParam(defaultValue = "pdf") String format) {
+    // Шаблон сравнивает created_at < to, поэтому верхняя граница — начало следующего дня
+    return reports.render(ReportRequest.template("classpath:reports/orders-period.jrxml")
+            .param("from", from).param("to", to.plusDays(1))
+            .fileName("Заказы за период").format(ReportFormat.parse(format))).toResponseEntity();
+}
+```
+
+Данные берутся двумя путями. Если в шаблоне есть SQL (`<query language="sql">`), отчёт сам читает БД на соединении
+вашей транзакции, поэтому его можно вызывать из `@Transactional` и он увидит свежие изменения; `data(...)` тогда
+передавать нельзя. Если SQL нет, строки секции `detail` подаются списком DTO (`.data(список)`, записи работают без
+геттеров), а списки для таблиц внутри отчёта — параметрами (`.param("items", список)` при параметре типа `JRDataSource`);
+без `data` отчёт строится из параметров. Шаблон задаётся только в коде или настройках, никогда из параметров запроса клиента.
+Форматы: `pdf`, `xlsx`, `docx`. Подробно и подводные камни: [Отчёты](docs/reference.md#15-отчёты-jasperreports).
+
+Проверка: `GET /api/demo/orders/report?from=…&to=…` отдаёт PDF (`Content-Disposition: attachment`, тело начинается с `%PDF`).
+
 ## Демо-режим без пароля
 
 `argent.auth.password-required=false`: вход только по логину, пароль администратора не нужен.
@@ -246,5 +274,6 @@ curl -s "$H/api/export/dictionaries/orders?format=xlsx" -H "Authorization: Beare
 
 - [docs/reference.md](docs/reference.md) — свойства, REST с кодами, сообщения, лимиты, замена бинов, миграция.
 - Swagger UI — `http://localhost:8080/swagger-ui.html` (открыт без входа; токен — `POST /api/auth/login`).
+- Печатные формы — [раздел 15 справочника](docs/reference.md#15-отчёты-jasperreports).
 - Пример приложения — `main-backend` (заказы со статусами, номерами, `@Version` и вложениями).
 - Тесты библиотеки: `./mvnw test` (нужен Docker).

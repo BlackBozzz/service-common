@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="with-items" pageWidth="595" pageHeight="842" columnWidth="515" leftMargin="40" rightMargin="40" topMargin="50" bottomMargin="50">
+    <dataset name="Items">
+        <field name="name" class="java.lang.String"/>
+        <field name="qty" class="java.lang.Integer"/>
+    </dataset>
+    <parameter name="heading" class="java.lang.String"/>
+    <parameter name="items" class="net.sf.jasperreports.engine.JRDataSource"/>
+    <title height="70">
+        <element kind="textField" x="0" y="0" width="515" height="20" fontName="DejaVu Sans">
+            <expression><![CDATA[$P{heading}]]></expression>
+        </element>
+        <element kind="component" x="0" y="30" width="280" height="30">
+            <component kind="table">
+                <datasetRun subDataset="Items">
+                    <dataSourceExpression><![CDATA[$P{items}]]></dataSourceExpression>
+                </datasetRun>
+                <column kind="single" width="200">
+                    <detailCell height="15">
+                        <element kind="textField" x="0" y="0" width="200" height="15" fontName="DejaVu Sans">
+                            <expression><![CDATA[$F{name}]]></expression>
+                        </element>
+                    </detailCell>
+                </column>
+                <column kind="single" width="80">
+                    <detailCell height="15">
+                        <element kind="textField" x="0" y="0" width="80" height="15" fontName="DejaVu Sans">
+                            <expression><![CDATA[$F{qty}]]></expression>
+                        </element>
+                    </detailCell>
+                </column>
+            </component>
+        </element>
+    </title>
+</jasperReport>

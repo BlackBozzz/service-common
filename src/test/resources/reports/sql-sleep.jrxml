@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="sql-sleep" pageWidth="595" pageHeight="842" columnWidth="515" leftMargin="40" rightMargin="40" topMargin="50" bottomMargin="50">
+    <query language="sql"><![CDATA[SELECT pg_sleep(5) AS slept]]></query>
+    <field name="slept" class="java.lang.Object"/>
+    <detail>
+        <band height="20">
+            <element kind="staticText" x="0" y="0" width="515" height="20" fontName="DejaVu Sans">
+                <text><![CDATA[Готово]]></text>
+            </element>
+        </band>
+    </detail>
+</jasperReport>

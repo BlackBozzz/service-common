@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="sql-orders" pageWidth="595" pageHeight="842" columnWidth="515" leftMargin="40" rightMargin="40" topMargin="50" bottomMargin="50">
+    <parameter name="from" class="java.util.Date"/>
+    <parameter name="to" class="java.util.Date"/>
+    <query language="sql"><![CDATA[SELECT number, customer, total, created_at FROM report_orders WHERE created_at >= $P{from} AND created_at < $P{to} ORDER BY created_at]]></query>
+    <field name="number" class="java.lang.String"/>
+    <field name="customer" class="java.lang.String"/>
+    <field name="total" class="java.math.BigDecimal"/>
+    <field name="created_at" class="java.sql.Timestamp"/>
+    <variable name="sum" class="java.math.BigDecimal" calculation="Sum">
+        <expression><![CDATA[$F{total}]]></expression>
+    </variable>
+    <title height="20">
+        <element kind="staticText" x="0" y="0" width="515" height="20" fontName="DejaVu Sans">
+            <text><![CDATA[Заказы]]></text>
+        </element>
+    </title>
+    <detail>
+        <band height="20">
+            <element kind="textField" x="0" y="0" width="130" height="20" fontName="DejaVu Sans">
+                <expression><![CDATA[$F{number}]]></expression>
+            </element>
+            <element kind="textField" x="130" y="0" width="185" height="20" fontName="DejaVu Sans">
+                <expression><![CDATA[$F{customer}]]></expression>
+            </element>
+            <element kind="textField" x="315" y="0" width="100" height="20" fontName="DejaVu Sans">
+                <expression><![CDATA[$F{total}]]></expression>
+            </element>
+            <element kind="textField" x="415" y="0" width="100" height="20" fontName="DejaVu Sans" pattern="dd.MM.yyyy">
+                <expression><![CDATA[$F{created_at}]]></expression>
+            </element>
+        </band>
+    </detail>
+    <summary height="20">
+        <element kind="textField" x="0" y="0" width="515" height="20" fontName="DejaVu Sans">
+            <expression><![CDATA["Итого: " + $V{sum}]]></expression>
+        </element>
+    </summary>
+</jasperReport>
