@@ -42,7 +42,7 @@ public class GrantsCatalogController {
                 .map(DictionaryMetadataDto::code)
                 .toList()));
         List<String> actions = List.copyOf(new TreeSet<>(Stream.concat(
-                        securityProperties.actions().stream(), Stream.of(GrantConstants.ADMIN_ACTION))
+                        securityProperties.actions().stream(), Stream.of(GrantConstants.ADMIN_ACTION, "queue.read"))
                 .toList()));
         return new GrantsCatalogDto(tables, actions);
     }
