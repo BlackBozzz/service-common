@@ -19,6 +19,7 @@
         <poi.version>5.5.1</poi.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <jasperreports.version>7.0.8</jasperreports.version>
+        <argent.querydsl.version>7.7</argent.querydsl.version>
         <!-- По умолчанию тесты компилируются, но не запускаются при install. -->
         <skipTests>true</skipTests>
     </properties>
@@ -47,6 +48,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Querydsl JPA (OpenFeign 7.x, совместим с Jakarta Persistence и Spring Boot 4) -->
+        <dependency>
+            <groupId>io.github.openfeign.querydsl</groupId>
+            <artifactId>querydsl-jpa</artifactId>
+            <version>${argent.querydsl.version}</version>
         </dependency>
 
         <!-- Поддержка миграций базы данных -->
@@ -203,7 +211,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <proc>full</proc>
+                    <generatedSourcesDirectory>${project.build.directory}/generated-sources/java</generatedSourcesDirectory>
                     <annotationProcessorPaths>
+                        <!-- Lombok должен обрабатываться совместно с Querydsl -->
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
@@ -213,6 +224,17 @@
                             <groupId>org.springframework.boot</groupId>
                             <artifactId>spring-boot-configuration-processor</artifactId>
                             <version>${spring-boot.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.github.openfeign.querydsl</groupId>
+                            <artifactId>querydsl-apt</artifactId>
+                            <version>${argent.querydsl.version}</version>
+                            <classifier>jpa</classifier>
+                        </path>
+                        <path>
+                            <groupId>jakarta.persistence</groupId>
+                            <artifactId>jakarta.persistence-api</artifactId>
+                            <version>3.2.0</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
