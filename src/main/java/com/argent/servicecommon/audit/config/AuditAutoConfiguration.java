@@ -1,6 +1,7 @@
 package com.argent.servicecommon.audit.config;
 
 import com.argent.servicecommon.audit.AuditController;
+import com.argent.servicecommon.live.ArgentLivePublisher;
 import com.argent.servicecommon.audit.AuditEventListener;
 import com.argent.servicecommon.audit.AuditHibernateIntegrator;
 import com.argent.servicecommon.audit.AuditWriter;
@@ -16,6 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
@@ -46,8 +48,10 @@ public class AuditAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(AuditWriter.class)
-    public AuditWriter auditWriter(JdbcTemplate jdbcTemplate) {
-        return new AuditWriter(jdbcTemplate);
+    public AuditWriter auditWriter(JdbcTemplate jdbcTemplate, ObjectProvider<ArgentLivePublisher> live) {
+        AuditWriter writer = new AuditWriter(jdbcTemplate);
+        live.ifAvailable(publisher -> writer.setOnAuditChanged(publisher::auditChanged));
+        return writer;
     }
 
     @Bean

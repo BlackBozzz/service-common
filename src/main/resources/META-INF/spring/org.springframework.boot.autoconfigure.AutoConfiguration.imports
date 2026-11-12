@@ -15,4 +15,6 @@ com.argent.servicecommon.audit.config.AuditAutoConfiguration
 com.argent.servicecommon.attachment.config.AttachmentAutoConfiguration
 com.argent.servicecommon.report.config.ReportAutoConfiguration
 com.argent.servicecommon.queue.config.ArgentQueueAutoConfiguration
+com.argent.servicecommon.mail.config.ArgentMailAutoConfiguration
 com.argent.servicecommon.querydsl.config.ArgentQuerydslAutoConfiguration
+com.argent.servicecommon.live.config.ArgentLiveAutoConfiguration

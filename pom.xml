@@ -19,6 +19,7 @@
         <poi.version>5.5.1</poi.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <jasperreports.version>7.0.8</jasperreports.version>
+        <!-- Не использовать querydsl.version: оно переопределяет BOM Spring Boot (com.querydsl). -->
         <argent.querydsl.version>7.7</argent.querydsl.version>
         <!-- По умолчанию тесты компилируются, но не запускаются при install. -->
         <skipTests>true</skipTests>
@@ -127,6 +128,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <!-- Lightweight, native WebSocket transport for admin live notifications. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
         <!-- Spring Security: аутентификация и авторизация -->

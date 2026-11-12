@@ -1,6 +1,7 @@
 package com.argent.servicecommon.queue.config;
 
 import com.argent.servicecommon.queue.controller.ArgentQueueController;
+import com.argent.servicecommon.live.ArgentLivePublisher;
 import com.argent.servicecommon.queue.service.ArgentQueueRegistry;
 import com.argent.servicecommon.queue.service.ArgentQueueService;
 import com.argent.servicecommon.queue.service.ArgentQueueStore;
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,8 +27,11 @@ import tools.jackson.databind.json.JsonMapper;
 public class ArgentQueueAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(ArgentQueueStore.class)
-    ArgentQueueStore argentQueueStore(JdbcTemplate jdbc, PlatformTransactionManager txManager) {
-        return new ArgentQueueStore(jdbc, txManager);
+    ArgentQueueStore argentQueueStore(JdbcTemplate jdbc, PlatformTransactionManager txManager,
+                                      ObjectProvider<ArgentLivePublisher> live) {
+        ArgentQueueStore store = new ArgentQueueStore(jdbc, txManager);
+        live.ifAvailable(publisher -> store.setOnQueueChanged(publisher::queueChanged));
+        return store;
     }
 
     @Bean

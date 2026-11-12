@@ -1,6 +1,7 @@
 package com.argent.servicecommon.audit;
 
 import com.argent.servicecommon.security.CurrentUser;
+import com.argent.servicecommon.live.ArgentLiveTransaction;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.OffsetDateTime;
@@ -22,6 +23,12 @@ public class AuditWriter {
             + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private final JdbcTemplate jdbcTemplate;
+    private volatile Runnable onAuditChanged = () -> { };
+
+    public void setOnAuditChanged(Runnable callback) {
+        this.onAuditChanged = Objects.requireNonNull(callback);
+    }
+
 
     public AuditWriter(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate);
@@ -35,5 +42,6 @@ public class AuditWriter {
         jdbcTemplate.update(INSERT_SQL, entityType, entityId, action, field, oldValue, newValue,
                 CurrentUser.id().orElse(null), CurrentUser.login().orElse(null),
                 OffsetDateTime.now(ZoneOffset.UTC));
+        ArgentLiveTransaction.afterCommit(onAuditChanged);
     }
 }

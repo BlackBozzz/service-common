@@ -244,6 +244,9 @@ public class SecurityAutoConfiguration {
             http.authorizeHttpRequests(requests -> requests
                             .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                             .requestMatchers(permitPaths.toArray(String[]::new)).permitAll()
+                            // Browser WebSocket cannot set Authorization. The one-use ticket is validated
+                            // by the WebSocket handshake interceptor before accepting a connection.
+                            .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/argent-live/ws").permitAll()
                             .requestMatchers(DICTIONARY_LIST_PATH).authenticated()
                             .requestMatchers(DICTIONARY_PATH).access(dictionaryAuthorizationManager)
                             .anyRequest().authenticated())

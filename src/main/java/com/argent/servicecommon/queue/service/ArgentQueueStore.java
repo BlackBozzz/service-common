@@ -1,6 +1,7 @@
 package com.argent.servicecommon.queue.service;
 
 import com.argent.servicecommon.queue.dto.ArgentQueueDto;
+import com.argent.servicecommon.live.ArgentLiveTransaction;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -22,6 +23,16 @@ public class ArgentQueueStore {
             + "next_run_at, created_at, started_at, finished_at, last_error, idempotency_key";
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
+    private volatile Runnable onQueueChanged = () -> { };
+
+    /** Optional callback; lets other projects use the queue without a WebSocket server. */
+    public void setOnQueueChanged(Runnable callback) {
+        this.onQueueChanged = Objects.requireNonNull(callback);
+    }
+
+    private void changed() {
+        ArgentLiveTransaction.afterCommit(onQueueChanged);
+    }
 
     public ArgentQueueStore(JdbcTemplate jdbc, PlatformTransactionManager manager) {
         this.jdbc = Objects.requireNonNull(jdbc);
@@ -42,6 +53,7 @@ public class ArgentQueueStore {
                 return jdbc.queryForObject("SELECT id FROM argent_queue_task WHERE queue_id = ? AND idempotency_key = ?",
                         UUID.class, queueId, idempotencyKey);
             }
+            changed();
             return id;
         });
     }
@@ -57,6 +69,7 @@ public class ArgentQueueStore {
         return transaction.execute(tx -> {
             UUID id = ensureQueue(name);
             jdbc.update("UPDATE argent_queue SET allow_skip = ?, updated_at = now() WHERE id = ?", allowSkip, id);
+            changed();
             return id;
         });
     }
@@ -108,11 +121,13 @@ public class ArgentQueueStore {
     public void pause(UUID queueId, boolean paused) {
         requireUpdated(jdbc.update("UPDATE argent_queue SET paused = ?, updated_at = now() WHERE id = ?", paused, queueId),
                 "Очередь не найдена");
+        changed();
     }
 
     public void allowSkip(UUID queueId, boolean allowSkip) {
         requireUpdated(jdbc.update("UPDATE argent_queue SET allow_skip = ?, updated_at = now() WHERE id = ?",
                 allowSkip, queueId), "Очередь не найдена");
+        changed();
     }
 
     /** Досрочно делает доступными все ожидающие повторы; текущие RUNNING не затрагивает. */
@@ -123,10 +138,12 @@ public class ArgentQueueStore {
             if (paused.isEmpty()) throw notFound("Очередь не найдена");
             if (paused.getFirst()) throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Очередь на паузе. Сначала возобновите её.");
-            return jdbc.update("""
+            int updated = jdbc.update("""
                     UPDATE argent_queue_task SET status = 'PENDING', next_run_at = now(), updated_at = now()
                     WHERE queue_id = ? AND status = 'RETRY_WAIT'
                     """, queueId);
+            if (updated > 0) changed();
+            return updated;
         });
     }
 
@@ -137,6 +154,7 @@ public class ArgentQueueStore {
                 """, taskId);
         if (count == 0) throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Повтор доступен только для задачи, ожидающей повторного запуска");
+        changed();
     }
 
     public void priority(UUID taskId, int priority) {
@@ -144,6 +162,7 @@ public class ArgentQueueStore {
                 UPDATE argent_queue_task SET priority = ?, updated_at = now()
                 WHERE id = ? AND status IN ('PENDING', 'RETRY_WAIT', 'PAUSED')
                 """, priority, taskId), "Нельзя изменить приоритет выполненной или работающей задачи");
+        changed();
     }
 
     public void cancel(UUID taskId) {
@@ -151,6 +170,7 @@ public class ArgentQueueStore {
                 UPDATE argent_queue_task SET status = 'CANCELLED', updated_at = now(), finished_at = now()
                 WHERE id = ? AND status IN ('PENDING', 'RETRY_WAIT', 'PAUSED')
                 """, taskId), "Нельзя отменить работающую или завершённую задачу");
+        changed();
     }
 
     /** Подбирает задачу, атомарно удерживая строку очереди. Для строгого FIFO нельзя обойти ожидающую голову. */
@@ -182,11 +202,12 @@ public class ArgentQueueStore {
             boolean allowSkip = Boolean.TRUE.equals(jdbc.queryForObject(
                     "SELECT allow_skip FROM argent_queue WHERE id = ?", Boolean.class, queueId));
             String order = allowSkip ? "priority DESC, next_run_at ASC, sequence_no ASC" : "sequence_no ASC";
-            List<ClaimTask> tasks = jdbc.query("""
+            String selectSql = """
                     SELECT id, handler_key, payload_json, attempt_count
                     FROM argent_queue_task WHERE queue_id = ?
                       AND status IN ('PENDING', 'RETRY_WAIT') AND next_run_at <= now()
-                    ORDER BY """ + order + " LIMIT 1", (rs, row) ->
+                    """ + "ORDER BY " + order + " LIMIT 1";
+            List<ClaimTask> tasks = jdbc.query(selectSql, (rs, row) ->
                     new ClaimTask(rs.getObject("id", UUID.class), rs.getString("handler_key"),
                             rs.getString("payload_json"), rs.getInt("attempt_count")), queueId);
             if (tasks.isEmpty()) return null;
@@ -209,6 +230,7 @@ public class ArgentQueueStore {
                     INSERT INTO argent_queue_task_attempt(task_id, attempt_no, started_at)
                     VALUES (?, ?, now())
                     """, task.id(), task.attemptCount() + 1);
+            changed();
             return new Claim(queueId, task.id(), token, task.handlerKey(), task.payloadJson(),
                     task.attemptCount() + 1);
         });
@@ -237,6 +259,7 @@ public class ArgentQueueStore {
                         WHERE task_id = ? AND attempt_no = ? AND result = 'RUNNING'
                         """, claim.taskId(), claim.attemptNo());
                 unlock(claim);
+                changed();
             }
         });
     }
@@ -261,6 +284,7 @@ public class ArgentQueueStore {
                         WHERE task_id = ? AND attempt_no = ? AND result = 'RUNNING'
                         """, errorType, message, trace, claim.taskId(), claim.attemptNo());
                 unlock(claim);
+                changed();
             }
         });
     }
@@ -304,6 +328,7 @@ public class ArgentQueueStore {
                           updated_at = now() WHERE id = ?
                         """, id);
             }
+            if (!ids.isEmpty()) changed();
             return ids.size();
         });
     }
