@@ -28,6 +28,10 @@ public class User {
     @Column(name = "display_name", nullable = false)
     private String displayName;
 
+    /** Адрес для уведомлений и почтовых рассылок; необязателен. */
+    @Column(name = "email", length = 254)
+    private String email;
+
     @Column(name = "password_hash")
     private String passwordHash;
 

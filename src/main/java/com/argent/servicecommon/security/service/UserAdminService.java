@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -96,6 +97,7 @@ public class UserAdminService {
         User user = new User();
         user.setLogin(login);
         user.setDisplayName(request.displayName().trim());
+        user.setEmail(normalizeAndCheckEmail(request.email(), null));
         user.setEnabled(true);
         if (request.password() != null) {
             user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -124,6 +126,10 @@ public class UserAdminService {
             }
         }
         user.setDisplayName(request.displayName().trim());
+        // null (поле отсутствует в JSON) — сохранить прежний email; пустая строка — удалить.
+        if (request.email() != null) {
+            user.setEmail(normalizeAndCheckEmail(request.email(), id));
+        }
         user.setEnabled(request.enabled());
         return toDto(userRepository.save(user), roleCodesById());
     }
@@ -258,12 +264,24 @@ public class UserAdminService {
                 .collect(Collectors.toMap(Role::getId, Role::getCode));
     }
 
+    /** Приводит email к одному регистру и проверяет уникальность для понятной ошибки формы. */
+    private String normalizeAndCheckEmail(String input, UUID currentUserId) {
+        if (input == null || input.isBlank()) return null;
+        String email = input.trim().toLowerCase(Locale.ROOT);
+        if (userRepository.findByEmailIgnoreCase(email)
+                .filter(existing -> !Objects.equals(existing.getId(), currentUserId))
+                .isPresent()) {
+            throw new ValidationErrorsException(Map.of("email", "Этот email уже используется"));
+        }
+        return email;
+    }
+
     private UserDto toDto(User user, Map<UUID, String> roleCodes) {
         List<String> roles = userRoleRepository.findByIdUserId(user.getId()).stream()
                 .map(link -> roleCodes.get(link.getId().getRoleId()))
                 .sorted()
                 .toList();
-        return new UserDto(user.getId(), user.getLogin(), user.getDisplayName(), user.isEnabled(),
+        return new UserDto(user.getId(), user.getLogin(), user.getDisplayName(), user.getEmail(), user.isEnabled(),
                 user.getPasswordHash() != null, roles, user.getCreatedAt());
     }
 }

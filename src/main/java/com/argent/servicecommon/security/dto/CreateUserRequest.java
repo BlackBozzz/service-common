@@ -1,6 +1,7 @@
 package com.argent.servicecommon.security.dto;
 
 import com.argent.servicecommon.validation.MaxBytes;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -9,6 +10,11 @@ public record CreateUserRequest(
         @NotBlank @Size(max = 100) String login,
         @NotBlank @Size(max = 255) String displayName,
         @Size(min = 6, max = 72)
-        @MaxBytes(value = 72, message = MaxBytes.PASSWORD_MESSAGE) String password
+        @MaxBytes(value = 72, message = MaxBytes.PASSWORD_MESSAGE) String password,
+        @Email @Size(max = 254) String email
 ) {
+    /** Сохраняет совместимость с вызовами конструктора без email. */
+    public CreateUserRequest(String login, String displayName, String password) {
+        this(login, displayName, password, null);
+    }
 }

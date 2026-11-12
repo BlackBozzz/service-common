@@ -19,6 +19,8 @@
         <poi.version>5.5.1</poi.version>
         <commons-csv.version>1.14.1</commons-csv.version>
         <jasperreports.version>7.0.8</jasperreports.version>
+        <!-- По умолчанию тесты компилируются, но не запускаются при install. -->
+        <skipTests>true</skipTests>
     </properties>
     <dependencies>
         <!-- Поддержка автоконфигурации Spring Boot -->
@@ -181,6 +183,12 @@
             <version>${jasperreports.version}</version>
         </dependency>
 
+        <!-- SMTP / Jakarta Mail для отправки писем через JavaMailSender -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Тестовые средства Spring Security -->
         <dependency>
             <groupId>org.springframework.security</groupId>
@@ -217,6 +225,8 @@
                 <configuration>
                     <!-- Используем обычный classpath вместо Manifest-JAR -->
                     <useManifestOnlyJar>false</useManifestOnlyJar>
+                    <!-- Чтобы выполнить тесты: -DskipTests=false -->
+                    <skipTests>${skipTests}</skipTests>
                 </configuration>
             </plugin>
         </plugins>

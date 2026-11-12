@@ -9,9 +9,15 @@ public record UserDto(
         UUID id,
         String login,
         String displayName,
+        String email,
         boolean enabled,
         boolean hasPassword,
         List<String> roles,
         Instant createdAt
 ) {
+    /** Совместимость с Java-кодом, создающим DTO без email. */
+    public UserDto(UUID id, String login, String displayName, boolean enabled,
+                   boolean hasPassword, List<String> roles, Instant createdAt) {
+        this(id, login, displayName, null, enabled, hasPassword, roles, createdAt);
+    }
 }

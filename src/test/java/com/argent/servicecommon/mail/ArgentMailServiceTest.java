@@ -15,6 +15,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -62,10 +63,35 @@ class ArgentMailServiceTest {
         User first = user("admin@example.com", true);
         User disabled = user("disabled@example.com", false);
         User missing = user(null, true);
-        when(userRoles.findUsersByRoleCodes(List.of("MANAGER"))).thenReturn(List.of(first, disabled, missing));
+        when(userRoles.findUsersByRoleCodes(Set.of("MANAGER"))).thenReturn(List.of(first, disabled, missing));
         ArgentMailResult result = service.sendToRole("MANAGER", ArgentMailMessage.html("Тема", "<b>Текст</b>"));
         assertEquals(new ArgentMailResult(3, 1, 2, 0), result);
         verify(sender, times(1)).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void multipleIdsUseUserRepository() {
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        when(users.findByIdIn(Set.of(firstId, secondId)))
+                .thenReturn(List.of(user("first@example.com", true), user("second@example.com", true)));
+
+        ArgentMailResult result = service.sendToUserIds(
+                List.of(firstId, secondId), ArgentMailMessage.text("Тема", "Текст"));
+
+        assertEquals(new ArgentMailResult(2, 2, 0, 0), result);
+        verify(sender, times(2)).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void allEnabledUsersUseRepository() {
+        when(users.findByEnabledTrueAndEmailIsNotNull())
+                .thenReturn(List.of(user("valid@example.com", true), user("", true)));
+
+        ArgentMailResult result = service.sendToAllEnabledUsers(ArgentMailMessage.text("Тема", "Текст"));
+
+        assertEquals(new ArgentMailResult(2, 1, 1, 0), result);
+        verify(sender).send(any(MimeMessage.class));
     }
 
     @Test
