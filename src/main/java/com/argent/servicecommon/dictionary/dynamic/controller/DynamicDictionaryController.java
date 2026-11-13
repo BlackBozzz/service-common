@@ -1,5 +1,7 @@
 package com.argent.servicecommon.dictionary.dynamic.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.dictionary.dynamic.dto.DynamicDictionarySchema;
 import com.argent.servicecommon.dictionary.dynamic.dto.DynamicDictionarySummary;
 import com.argent.servicecommon.dictionary.dynamic.dto.DynamicOption;
@@ -24,6 +26,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/argent-dictionary")
+@Tag(name = "Каталог данных")
 public class DynamicDictionaryController {
     private final DynamicDictionaryCatalog catalog;
     private final DynamicDictionarySchemaService schemaService;
@@ -39,18 +42,21 @@ public class DynamicDictionaryController {
 
     /** Возвращает справочники, доступные в реестре. */
     @GetMapping
+    @Operation(summary = "Получить каталог таблиц")
     public List<DynamicDictionarySummary> dictionaries() {
         return catalog.list();
     }
 
     /** Возвращает расширенную схему формы и выбора ссылок для фронтенда. */
     @GetMapping("/{code}/schema")
+    @Operation(summary = "Получить схему таблицы")
     public DynamicDictionarySchema schema(@PathVariable String code) {
         return schemaService.describe(code);
     }
 
     /** Возвращает страницу полноценных DTO с поиском, сортировкой и фильтрацией. */
     @GetMapping("/{code}/records")
+    @Operation(summary = "Получить записи таблицы")
     public DynamicPage<?> records(
             @PathVariable String code,
             @RequestParam(defaultValue = "0") int page,
@@ -70,6 +76,7 @@ public class DynamicDictionaryController {
 
     /** Возвращает компактную страницу для поля выбора существующей записи. */
     @GetMapping("/{code}/options")
+    @Operation(summary = "Получить варианты выбора")
     public DynamicPage<DynamicOption> options(
             @PathVariable String code,
             @RequestParam(defaultValue = "0") int page,

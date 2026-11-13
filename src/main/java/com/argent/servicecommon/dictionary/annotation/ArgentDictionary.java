@@ -27,4 +27,7 @@ public @interface ArgentDictionary {
      * Используется для формирования метаданных динамических форм.
      */
     Class<?> dtoClass();
+
+    /** Группа в разделе «Данные». */
+    String group() default "Справочники";
 }

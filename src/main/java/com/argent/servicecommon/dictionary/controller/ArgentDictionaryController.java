@@ -1,7 +1,10 @@
 
 package com.argent.servicecommon.dictionary.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
 import com.argent.servicecommon.dictionary.metadata.DictionaryMetadataService;
 import com.argent.servicecommon.dictionary.service.DictionaryDtoCrudService;
 import jakarta.persistence.EntityManager;
@@ -30,6 +33,7 @@ import java.util.Objects;
  */
 @RestController
 @RequestMapping("/api/argent-dictionary")
+@Tag(name = "Таблицы и справочники")
 public class ArgentDictionaryController {
     private final DictionaryDtoCrudService crudService;
     private final DictionaryMetadataService metadataService;
@@ -61,6 +65,7 @@ public class ArgentDictionaryController {
      * @return описание полей и ограничений DTO
      */
     @GetMapping("/{code}/form")
+    @Operation(summary = "Получить описание формы таблицы")
     public Object getForm(@PathVariable String code) {
 
         // Сервис метаданных извлекает описание полей DTO,
@@ -76,6 +81,7 @@ public class ArgentDictionaryController {
      * @return типизированный DTO на уровне сервиса
      */
     @GetMapping("/{code}/records/{id}")
+    @Operation(summary = "Получить запись по идентификатору")
     public Object findById(
             @PathVariable String code,
             @PathVariable String id
@@ -98,6 +104,7 @@ public class ArgentDictionaryController {
      * @return DTO созданной записи
      */
     @PostMapping("/{code}/records")
+    @Operation(summary = "Создать запись таблицы")
     @ResponseStatus(HttpStatus.CREATED)
     public Object create(
             @PathVariable String code,
@@ -105,6 +112,7 @@ public class ArgentDictionaryController {
     ) {
         DictionaryTypes types = resolveTypes(code);
 
+        assertEditable(types.entityClass());
         return createTyped(
                 code,
                 body,
@@ -125,6 +133,7 @@ public class ArgentDictionaryController {
      * @return DTO обновлённой записи
      */
     @PutMapping("/{code}/records/{id}")
+    @Operation(summary = "Изменить запись таблицы")
     public Object update(
             @PathVariable String code,
             @PathVariable String id,
@@ -132,6 +141,7 @@ public class ArgentDictionaryController {
     ) {
         DictionaryTypes types = resolveTypes(code);
 
+        assertEditable(types.entityClass());
         return updateTyped(
                 code,
                 id,
@@ -148,6 +158,7 @@ public class ArgentDictionaryController {
      * @param id идентификатор записи
      */
     @DeleteMapping("/{code}/records/{id}")
+    @Operation(summary = "Удалить запись таблицы")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @PathVariable String code,
@@ -155,6 +166,7 @@ public class ArgentDictionaryController {
     ) {
         // Существование записи и права на изменение
         // должны проверяться на сервисном уровне.
+        assertEditable(resolveTypes(code).entityClass());
         crudService.delete(code, id);
     }
 
@@ -165,12 +177,30 @@ public class ArgentDictionaryController {
      * <p>Не принимает имена классов от HTTP-клиента
      * и не загружает произвольные Java-классы.</p>
      */
+    private void assertEditable(Class<?> entityClass) {
+        ArgentDataTable dataTable = entityClass.getAnnotation(ArgentDataTable.class);
+        if (dataTable != null && !dataTable.editable()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "Таблица доступна только для чтения.");
+        }
+    }
+
     private DictionaryTypes resolveTypes(String code) {
 
         if (code == null || code.isBlank()) {
             throw new IllegalArgumentException(
                     "Код справочника не может быть пустым."
             );
+        }
+
+        // Таблицы приложения не имеют записи в common_dictionaries и DDL из библиотеки.
+        for (EntityType<?> type : entityManager.getMetamodel().getEntities()) {
+            Class<?> candidate = type.getJavaType();
+            Table table = candidate.getAnnotation(Table.class);
+            ArgentDataTable own = candidate.getAnnotation(ArgentDataTable.class);
+            if (table != null && code.equals(table.name()) && own != null) {
+                return new DictionaryTypes(candidate, own.dtoClass());
+            }
         }
 
         // Ищем регистрацию справочника.

@@ -1,6 +1,7 @@
 package com.argent.servicecommon.dictionary.service;
 
 import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
 import com.argent.servicecommon.dictionary.exception.DictionaryMappingException;
 import com.argent.servicecommon.dictionary.mapper.DictionaryDtoMapper;
 import jakarta.validation.ConstraintViolation;
@@ -90,7 +91,10 @@ public class DictionaryDtoCrudService {
         Objects.requireNonNull(entityClass, "Класс сущности не может быть null.");
         Objects.requireNonNull(dtoClass, "Класс DTO не может быть null.");
         ArgentDictionary dictionary = entityClass.getAnnotation(ArgentDictionary.class);
-        if (dictionary == null || !dictionary.dtoClass().equals(dtoClass)) {
+        ArgentDataTable dataTable = entityClass.getAnnotation(ArgentDataTable.class);
+        boolean accepted = dictionary != null && dictionary.dtoClass().equals(dtoClass)
+                || dataTable != null && dataTable.dtoClass().equals(dtoClass);
+        if (!accepted) {
             throw new DictionaryMappingException(
                     "DTO '%s' не соответствует @ArgentDictionary сущности '%s'."
                             .formatted(dtoClass.getName(), entityClass.getName()));

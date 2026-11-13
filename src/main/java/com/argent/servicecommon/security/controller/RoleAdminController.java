@@ -1,5 +1,7 @@
 package com.argent.servicecommon.security.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.security.dto.RoleDto;
 import com.argent.servicecommon.security.dto.RoleRequest;
 import com.argent.servicecommon.security.service.RoleAdminService;
@@ -24,6 +26,7 @@ import java.util.Objects;
 @RestController
 @RequestMapping("/api/roles")
 @PreAuthorize("@argentAccess.action('admin')")
+@Tag(name = "Управление ролями")
 public class RoleAdminController {
 
     private final RoleAdminService roleAdminService;
@@ -34,24 +37,28 @@ public class RoleAdminController {
 
     /** Все роли с грантами. */
     @GetMapping
+    @Operation(summary = "Получить роли")
     public List<RoleDto> list() {
         return roleAdminService.list();
     }
 
     /** Роль по коду. */
     @GetMapping("/{code}")
+    @Operation(summary = "Получить роль по коду")
     public RoleDto get(@PathVariable String code) {
         return roleAdminService.get(code);
     }
 
     /** Создаёт роль с кодом из пути или изменяет существующую; код роли не меняется. */
     @PutMapping("/{code}")
+    @Operation(summary = "Создать или изменить роль")
     public RoleDto upsert(@PathVariable String code, @Valid @RequestBody RoleRequest request) {
         return roleAdminService.upsert(code, request);
     }
 
     /** Удаляет несистемную роль, не назначенную пользователям. */
     @DeleteMapping("/{code}")
+    @Operation(summary = "Удалить роль")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable String code) {
         roleAdminService.delete(code);

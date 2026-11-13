@@ -1,5 +1,7 @@
 package com.argent.servicecommon.attachment;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.attachment.dto.AttachmentDto;
 import com.argent.servicecommon.attachment.entity.Attachment;
 import com.argent.servicecommon.security.CurrentUser;
@@ -34,6 +36,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/attachments")
+@Tag(name = "Вложения")
 public class AttachmentController {
 
     private final AttachmentService service;
@@ -44,6 +47,7 @@ public class AttachmentController {
 
     /** Вложения записи; без {@code table:<entityType>:read} — 403. */
     @GetMapping
+    @Operation(summary = "Получить список вложений")
     @PreAuthorize("@argentAccess.table(#entityType, 'read')")
     public List<AttachmentDto> list(@RequestParam("entityType") String entityType,
                                     @RequestParam("entityId") String entityId) {
@@ -52,6 +56,7 @@ public class AttachmentController {
 
     /** Загрузка файла; без {@code table:<entityType>:write} — 403, недопустимый файл — 400. */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Загрузить файл")
     @PreAuthorize("@argentAccess.table(#entityType, 'write')")
     @ResponseStatus(HttpStatus.CREATED)
     public AttachmentDto upload(@RequestParam("entityType") String entityType,
@@ -62,6 +67,7 @@ public class AttachmentController {
 
     /** Скачивание; без права {@code read} на таблицу вложения — 404, чтобы не раскрывать его существование. */
     @GetMapping("/{id}")
+    @Operation(summary = "Скачать вложение")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> download(@PathVariable("id") UUID id) {
         Attachment attachment = findReadable(id);
@@ -81,6 +87,7 @@ public class AttachmentController {
 
     /** Удаление; без права {@code read} — 404, с {@code read} без {@code write} — 403. */
     @DeleteMapping("/{id}")
+    @Operation(summary = "Удалить вложение")
     @PreAuthorize("isAuthenticated()")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable("id") UUID id) {

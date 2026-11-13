@@ -1,5 +1,7 @@
 package com.argent.servicecommon.transfer.imp;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.dictionary.dynamic.dto.DynamicDictionarySummary;
 import com.argent.servicecommon.dictionary.dynamic.exception.DynamicDictionaryNotFoundException;
 import com.argent.servicecommon.dictionary.dynamic.metadata.DynamicDictionaryCatalog;
@@ -37,6 +39,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/import/dictionaries")
+@Tag(name = "Импорт")
 public class ImportController {
 
     private static final Logger log = LoggerFactory.getLogger(ImportController.class);
@@ -59,6 +62,7 @@ public class ImportController {
 
     /** Импортирует один лист в справочник {@code code}. */
     @PostMapping(path = "/{code}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Импортировать справочник")
     @PreAuthorize("@argentAccess.action('import') and @argentAccess.table(#code, 'write')")
     public ImportReport importDictionary(@PathVariable("code") String code,
                                          @RequestParam("file") MultipartFile file,
@@ -76,6 +80,7 @@ public class ImportController {
 
     /** Импортирует все листы книги XLSX: лист → справочник по коду или названию. */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Импортировать Excel-файл")
     @PreAuthorize("@argentAccess.action('import')")
     public List<SheetImportResult> importWorkbook(@RequestParam("file") MultipartFile file,
                                                   @RequestParam("mode") String mode) {

@@ -2,6 +2,7 @@
 package com.argent.servicecommon.dictionary.service;
 
 import com.argent.servicecommon.dictionary.repository.DictionaryRepository;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Table;
 import jakarta.persistence.metamodel.EntityType;
@@ -253,6 +254,17 @@ public class DictionaryCrudService {
             throw new IllegalArgumentException(
                     "Код справочника не может быть пустым."
             );
+        }
+
+        // Пользовательские таблицы разрешены только явной аннотацией известной JPA-сущности.
+        // Их DDL полностью принадлежит Flyway приложения.
+        for (EntityType<?> known : entityManager.getMetamodel().getEntities()) {
+            Class<?> candidate = known.getJavaType();
+            Table table = candidate.getAnnotation(Table.class);
+            if (table != null && code.equals(table.name())
+                    && candidate.isAnnotationPresent(ArgentDataTable.class)) {
+                return candidate;
+            }
         }
 
         // Читаем имя сущности из реестра.

@@ -1,5 +1,7 @@
 package com.argent.servicecommon.live;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.security.CurrentUser;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -15,12 +17,14 @@ import java.util.Set;
 /** Issue a WebSocket handshake ticket to JWT-authenticated users with relevant permissions. */
 @RestController
 @RequestMapping("/api/argent-live")
+@Tag(name = "Онлайн-события")
 public class ArgentLiveController {
     private final ArgentLiveBroker broker;
 
     public ArgentLiveController(ArgentLiveBroker broker) { this.broker = broker; }
 
     @GetMapping("/ticket")
+    @Operation(summary = "Получить билет для WebSocket")
     @PreAuthorize("@argentAccess.action('queue.read') or @argentAccess.action('admin')")
     public ResponseEntity<Map<String, String>> ticket() {
         Set<String> scopes = new HashSet<>();

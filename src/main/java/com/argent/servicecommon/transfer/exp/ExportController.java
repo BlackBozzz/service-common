@@ -1,5 +1,7 @@
 package com.argent.servicecommon.transfer.exp;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.util.FileNames;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -23,6 +25,7 @@ import java.util.Objects;
  */
 @RestController
 @RequestMapping("/api/export")
+@Tag(name = "Экспорт")
 public class ExportController {
 
     private final TableExporter exporter;
@@ -37,6 +40,7 @@ public class ExportController {
 
     /** Выгружает присланную таблицу. */
     @PostMapping(path = "/{format}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Экспортировать таблицу в файл")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<byte[]> exportTable(@PathVariable("format") String format, @RequestBody TableData data) {
         ExportFormat exportFormat = ExportFormat.parse(format);
@@ -51,6 +55,7 @@ public class ExportController {
 
     /** Выгружает справочник {@code code}. */
     @GetMapping("/dictionaries/{code}")
+    @Operation(summary = "Экспортировать справочник")
     @PreAuthorize("@argentAccess.table(#code, 'read')")
     public ResponseEntity<byte[]> exportDictionary(@PathVariable("code") String code,
                                                    @RequestParam(name = "format", defaultValue = "xlsx") String format,

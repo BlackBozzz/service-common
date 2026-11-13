@@ -1,5 +1,7 @@
 package com.argent.servicecommon.queue.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.queue.dto.ArgentQueueDto;
 import com.argent.servicecommon.queue.service.ArgentQueueService;
 import com.argent.servicecommon.security.CurrentUser;
@@ -22,16 +24,19 @@ import java.util.UUID;
 /** Админское API: чтение — действие queue.read, управление — только встроенное admin. */
 @RestController
 @RequestMapping("/api/argent-queues")
+@Tag(name = "Очереди")
 public class ArgentQueueController {
     private final ArgentQueueService service;
 
     public ArgentQueueController(ArgentQueueService service) { this.service = service; }
 
     @GetMapping
+    @Operation(summary = "Получить очереди")
     @PreAuthorize("@argentAccess.action('queue.read')")
     public List<ArgentQueueDto.Queue> queues() { return service.listQueues(); }
 
     @GetMapping("/{queueId}/tasks")
+    @Operation(summary = "Получить задачи очереди")
     @PreAuthorize("@argentAccess.action('queue.read')")
     public ArgentQueueDto.Page<ArgentQueueDto.Task> tasks(@PathVariable UUID queueId,
                                                           @RequestParam(defaultValue = "0") int page,
@@ -43,6 +48,7 @@ public class ArgentQueueController {
     }
 
     @GetMapping("/tasks/{taskId}")
+    @Operation(summary = "Получить сведения о задаче")
     @PreAuthorize("@argentAccess.action('queue.read')")
     public ArgentQueueDto.TaskDetails task(@PathVariable UUID taskId) {
         ArgentQueueDto.TaskDetails details = service.task(taskId);
@@ -56,36 +62,43 @@ public class ArgentQueueController {
     }
 
     @PostMapping("/{queueId}/pause")
+    @Operation(summary = "Приостановить очередь")
     @PreAuthorize("@argentAccess.action('admin')")
     public void pause(@PathVariable UUID queueId) { service.pauseQueue(queueId); }
 
     @PostMapping("/{queueId}/resume")
+    @Operation(summary = "Возобновить очередь")
     @PreAuthorize("@argentAccess.action('admin')")
     public void resume(@PathVariable UUID queueId) { service.resumeQueue(queueId); }
 
     @PostMapping("/{queueId}/run")
+    @Operation(summary = "Запустить обработку очереди")
     @PreAuthorize("@argentAccess.action('admin')")
     public Map<String, Integer> runNow(@PathVariable UUID queueId) {
         return Map.of("rescheduled", service.runQueueNow(queueId));
     }
 
     @PatchMapping("/{queueId}/settings")
+    @Operation(summary = "Изменить настройки очереди")
     @PreAuthorize("@argentAccess.action('admin')")
     public void settings(@PathVariable UUID queueId, @RequestBody ArgentQueueDto.QueueSettings settings) {
         service.setQueueAllowSkip(queueId, settings.allowSkip());
     }
 
     @PostMapping("/tasks/{taskId}/retry")
+    @Operation(summary = "Повторить неудачную задачу")
     @PreAuthorize("@argentAccess.action('admin')")
     public void retry(@PathVariable UUID taskId) { service.retryTask(taskId); }
 
     @PatchMapping("/tasks/{taskId}/priority")
+    @Operation(summary = "Изменить приоритет задачи")
     @PreAuthorize("@argentAccess.action('admin')")
     public void priority(@PathVariable UUID taskId, @RequestBody ArgentQueueDto.PriorityChange value) {
         service.setPriority(taskId, value.priority());
     }
 
     @PostMapping("/tasks/{taskId}/cancel")
+    @Operation(summary = "Отменить задачу")
     @PreAuthorize("@argentAccess.action('admin')")
     public void cancel(@PathVariable UUID taskId) { service.cancelTask(taskId); }
 }

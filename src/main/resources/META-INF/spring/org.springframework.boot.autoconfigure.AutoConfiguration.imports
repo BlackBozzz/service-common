@@ -18,3 +18,6 @@ com.argent.servicecommon.queue.config.ArgentQueueAutoConfiguration
 com.argent.servicecommon.mail.config.ArgentMailAutoConfiguration
 com.argent.servicecommon.querydsl.config.ArgentQuerydslAutoConfiguration
 com.argent.servicecommon.live.config.ArgentLiveAutoConfiguration
+
+com.argent.servicecommon.docs.config.ArgentDocsAutoConfiguration
+com.argent.servicecommon.docs.openapi.ArgentOpenApiAutoConfiguration

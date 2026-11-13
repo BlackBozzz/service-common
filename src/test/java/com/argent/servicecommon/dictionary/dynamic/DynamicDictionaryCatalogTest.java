@@ -1,6 +1,7 @@
 package com.argent.servicecommon.dictionary.dynamic;
 
 import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
 import com.argent.servicecommon.dictionary.dynamic.dto.DynamicDictionarySummary;
 import com.argent.servicecommon.dictionary.dynamic.exception.DynamicDictionaryBadRequestException;
 import com.argent.servicecommon.dictionary.dynamic.exception.DynamicDictionaryNotFoundException;
@@ -39,6 +40,13 @@ class DynamicDictionaryCatalogTest {
     static class Country { Long id; String name; }
 
     record CountryDto(Long id, String name) { }
+
+    @Table(name = "app_document")
+    @ArgentDataTable(name = "Документы", group = "Управление документацией", dtoClass = DocumentDto.class)
+    static class Document { Long id; String title; }
+
+    record DocumentDto(Long id, String title) { }
+
 
     @BeforeEach
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -120,6 +128,39 @@ class DynamicDictionaryCatalogTest {
 
         assertThat(catalog.list()).isEqualTo(expected);
         verify(metadata, never()).describe(anyString());
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldPublishDictionaryAndOwnTableWithSeparateGroups() {
+        var countryType = mock(EntityType.class);
+        when(countryType.getJavaType()).thenReturn(Country.class);
+        var documentType = mock(EntityType.class);
+        when(documentType.getJavaType()).thenReturn(Document.class);
+        doReturn(Set.of(countryType, documentType)).when(metamodel).getEntities();
+        doReturn(List.of(new DynamicDictionarySummary("dict_country", "Страны"))).when(jdbc).query(
+                eq("select code, name from common_dictionaries order by name, code"), any(RowMapper.class));
+
+        assertThat(catalog.list()).containsExactly(
+                new DynamicDictionarySummary("dict_country", "Страны", "dictionary", "Справочники"),
+                new DynamicDictionarySummary("app_document", "Документы", "table", "Управление документацией"));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldResolveOwnTableWithoutRegistryOrLibraryDdl() {
+        var documentType = mock(EntityType.class);
+        when(documentType.getJavaType()).thenReturn(Document.class);
+        doReturn(Set.of(documentType)).when(metamodel).getEntities();
+        var definition = new DictionaryDefinition("app_document", "Документы",
+                Document.class.getName(), DocumentDto.class.getName(), List.of());
+        when(metadata.describe("app_document")).thenReturn(definition);
+
+        var registered = catalog.require("app_document");
+
+        assertThat(registered.entityClass()).isEqualTo(Document.class);
+        assertThat(registered.dtoClass()).isEqualTo(DocumentDto.class);
+        verify(jdbc, never()).queryForObject(anyString(), eq(Integer.class), anyString());
     }
 
     private static DictionaryDefinition definition(String dtoName) {

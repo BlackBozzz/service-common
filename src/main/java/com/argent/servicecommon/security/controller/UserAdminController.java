@@ -1,5 +1,7 @@
 package com.argent.servicecommon.security.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.dictionary.dynamic.dto.DynamicPage;
 import com.argent.servicecommon.security.dto.CreateUserRequest;
 import com.argent.servicecommon.security.dto.SetPasswordRequest;
@@ -29,6 +31,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/users")
 @PreAuthorize("@argentAccess.action('admin')")
+@Tag(name = "Управление пользователями")
 public class UserAdminController {
 
     private final UserAdminService userAdminService;
@@ -39,6 +42,7 @@ public class UserAdminController {
 
     /** Страница пользователей с поиском по логину или отображаемому имени. */
     @GetMapping
+    @Operation(summary = "Получить пользователей")
     public DynamicPage<UserDto> list(@RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + UserAdminService.DEFAULT_PAGE_SIZE) int size) {
@@ -47,6 +51,7 @@ public class UserAdminController {
 
     /** Создаёт пользователя без ролей. */
     @PostMapping
+    @Operation(summary = "Создать пользователя")
     @ResponseStatus(HttpStatus.CREATED)
     public UserDto create(@Valid @RequestBody CreateUserRequest request) {
         return userAdminService.create(request);
@@ -54,18 +59,21 @@ public class UserAdminController {
 
     /** Изменяет отображаемое имя и активность пользователя. */
     @PutMapping("/{id}")
+    @Operation(summary = "Изменить пользователя")
     public UserDto update(@PathVariable UUID id, @Valid @RequestBody UpdateUserRequest request) {
         return userAdminService.update(id, request);
     }
 
     /** Заменяет роли пользователя. */
     @PutMapping("/{id}/roles")
+    @Operation(summary = "Назначить роли пользователю")
     public UserDto setRoles(@PathVariable UUID id, @Valid @RequestBody UserRolesRequest request) {
         return userAdminService.setRoles(id, request);
     }
 
     /** Устанавливает пользователю пароль. */
     @PostMapping("/{id}/password")
+    @Operation(summary = "Установить пароль пользователя")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setPassword(@PathVariable UUID id, @Valid @RequestBody SetPasswordRequest request) {
         userAdminService.setPassword(id, request);
@@ -73,6 +81,7 @@ public class UserAdminController {
 
     /** Отзывает все сессии пользователя. */
     @PostMapping("/{id}/revoke-sessions")
+    @Operation(summary = "Отозвать сессии пользователя")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revokeSessions(@PathVariable UUID id) {
         userAdminService.revokeSessions(id);

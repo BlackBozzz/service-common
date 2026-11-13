@@ -1,6 +1,7 @@
 package com.argent.servicecommon.dictionary.mapper;
 
 import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
 import com.argent.servicecommon.dictionary.exception.DictionaryMappingException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.metamodel.Attribute;
@@ -267,7 +268,9 @@ public class DefaultDictionaryDtoMapper implements DictionaryDtoMapper {
 
     private void verifyAnnotatedDto(Class<?> entityClass, Class<?> dtoClass) {
         ArgentDictionary dictionary = entityClass.getAnnotation(ArgentDictionary.class);
-        if (dictionary != null && !dictionary.dtoClass().equals(dtoClass)) {
+        ArgentDataTable dataTable = entityClass.getAnnotation(ArgentDataTable.class);
+        if ((dictionary != null && !dictionary.dtoClass().equals(dtoClass))
+                || (dataTable != null && !dataTable.dtoClass().equals(dtoClass))) {
             throw new DictionaryMappingException(
                     "Для сущности '%s' указан DTO '%s', но ожидается '%s'."
                             .formatted(entityClass.getSimpleName(), dtoClass.getName(),

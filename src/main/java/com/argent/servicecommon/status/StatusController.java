@@ -1,5 +1,7 @@
 package com.argent.servicecommon.status;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.status.dto.CommonStatusDto;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +19,7 @@ import java.util.Objects;
  */
 @RestController
 @RequestMapping("/api/status")
+@Tag(name = "Статусы")
 public class StatusController {
 
     private final StatusTransitionService service;
@@ -27,6 +30,7 @@ public class StatusController {
 
     /** Доступные текущему пользователю переходы из статуса {@code from}. */
     @GetMapping("/{type}/transitions")
+    @Operation(summary = "Получить разрешённые переходы статуса")
     @PreAuthorize("isAuthenticated()")
     public List<CommonStatusDto> transitions(@PathVariable("type") String type,
                                              @RequestParam(name = "from", required = false) String from) {

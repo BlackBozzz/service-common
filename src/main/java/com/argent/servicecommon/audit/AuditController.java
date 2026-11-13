@@ -1,5 +1,7 @@
 package com.argent.servicecommon.audit;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.audit.dto.AuditEntryDto;
 import com.argent.servicecommon.audit.entity.AuditEntry;
 import com.argent.servicecommon.audit.repository.AuditEntryRepository;
@@ -28,6 +30,7 @@ import java.util.regex.Pattern;
  */
 @RestController
 @RequestMapping("/api/audit")
+@Tag(name = "Аудит")
 public class AuditController {
 
     /** Наибольший размер страницы. */
@@ -46,6 +49,7 @@ public class AuditController {
      * до обращения к БД: не-админ получает 400 «Укажите entityType», а не 403.
      */
     @GetMapping
+    @Operation(summary = "Получить журнал аудита")
     @PreAuthorize("#entityType == null or @argentAccess.table(#entityType, 'read') "
             + "or @argentAccess.action('admin')")
     public DynamicPage<AuditEntryDto> page(

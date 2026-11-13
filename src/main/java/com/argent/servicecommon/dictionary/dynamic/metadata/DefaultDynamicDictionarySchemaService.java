@@ -1,6 +1,8 @@
 package com.argent.servicecommon.dictionary.dynamic.metadata;
 
 import com.argent.servicecommon.dictionary.dynamic.annotation.DynamicDictionaryDisplay;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
+import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
 import com.argent.servicecommon.dictionary.dynamic.annotation.DynamicFormField;
 import com.argent.servicecommon.dictionary.dynamic.dto.*;
 import com.argent.servicecommon.dictionary.mapper.DictionaryProperties;
@@ -44,10 +46,15 @@ public class DefaultDynamicDictionarySchemaService implements DynamicDictionaryS
                             .formatted(code, idField));
         }
         String displayField = displayField(dictionary.dtoClass());
+        ArgentDictionary standard = dictionary.entityClass().getAnnotation(ArgentDictionary.class);
+        ArgentDataTable own = dictionary.entityClass().getAnnotation(ArgentDataTable.class);
         return new DynamicDictionarySchema(
                 dictionary.definition().code(), dictionary.definition().name(),
                 idField, displayField,
-                enrich(dictionary.entityClass(), dictionary.dtoClass(), dictionary.definition().fields()));
+                enrich(dictionary.entityClass(), dictionary.dtoClass(), dictionary.definition().fields()),
+                own == null ? "dictionary" : "table",
+                own == null ? standard.group() : own.group(),
+                own == null || own.editable());
     }
 
     /** Находит название JPA-идентификатора без соглашения о названии id. */

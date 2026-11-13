@@ -1,6 +1,7 @@
 package com.argent.servicecommon.dictionary.metadata;
 
 import com.argent.servicecommon.dictionary.annotation.ArgentDictionary;
+import com.argent.servicecommon.dictionary.annotation.ArgentDataTable;
 import com.argent.servicecommon.dictionary.exception.DictionaryMappingException;
 import com.argent.servicecommon.dictionary.mapper.DictionaryDtoMapper;
 import com.argent.servicecommon.dictionary.mapper.DictionaryProperties;
@@ -55,7 +56,19 @@ public class DefaultDictionaryMetadataService implements DictionaryMetadataServi
                 (rs, index) -> new RegistryEntry(rs.getString("code"), rs.getString("name"),
                         rs.getString("entity_class"), rs.getString("dto_class")), code);
         if (records.isEmpty()) {
-            throw new IllegalArgumentException("Справочник '%s' не зарегистрирован.".formatted(code));
+            // Пользовательские таблицы публикуются только из уже зарегистрированных JPA-сущностей.
+            // Никакие имена классов из HTTP-запросов не загружаем.
+            for (var type : entityManager.getMetamodel().getEntities()) {
+                Class<?> entityClass = type.getJavaType();
+                Table table = entityClass.getAnnotation(Table.class);
+                ArgentDataTable dataTable = entityClass.getAnnotation(ArgentDataTable.class);
+                if (table != null && code.equals(table.name()) && dataTable != null) {
+                    mapper.validateStructure(entityClass, dataTable.dtoClass());
+                    return new DictionaryDefinition(code, dataTable.name(), entityClass.getName(),
+                            dataTable.dtoClass().getName(), describeFields(entityClass, dataTable.dtoClass()));
+                }
+            }
+            throw new IllegalArgumentException("Таблица или справочник '%s' не зарегистрированы.".formatted(code));
         }
         RegistryEntry row = records.getFirst();
         for (var type : entityManager.getMetamodel().getEntities()) {

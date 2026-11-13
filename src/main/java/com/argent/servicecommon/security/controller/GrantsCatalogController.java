@@ -1,5 +1,7 @@
 package com.argent.servicecommon.security.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.dictionary.dto.DictionaryMetadataDto;
 import com.argent.servicecommon.dictionary.service.DictionaryScannerService;
 import com.argent.servicecommon.security.SecurityProperties;
@@ -21,6 +23,7 @@ import java.util.stream.Stream;
 @RestController
 @RequestMapping("/api/grants")
 @PreAuthorize("@argentAccess.action('admin')")
+@Tag(name = "Права доступа")
 public class GrantsCatalogController {
 
     private final DictionaryScannerService dictionaryScannerService;
@@ -37,6 +40,7 @@ public class GrantsCatalogController {
      * и встроенное {@code admin}; оба списка по алфавиту без повторов.
      */
     @GetMapping("/catalog")
+    @Operation(summary = "Получить каталог доступных разрешений")
     public GrantsCatalogDto catalog() {
         List<String> tables = List.copyOf(new TreeSet<>(dictionaryScannerService.scan().stream()
                 .map(DictionaryMetadataDto::code)

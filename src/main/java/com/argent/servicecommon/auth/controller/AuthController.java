@@ -1,5 +1,7 @@
 package com.argent.servicecommon.auth.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.auth.AuthProperties;
 import com.argent.servicecommon.auth.dto.AuthConfigDto;
 import com.argent.servicecommon.auth.dto.CurrentUserDto;
@@ -27,6 +29,7 @@ import java.util.Objects;
  */
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Авторизация")
 public class AuthController {
 
     private final AuthService authService;
@@ -44,12 +47,14 @@ public class AuthController {
 
     /** Вход по логину (и паролю, если он требуется); 401 при ошибке. */
     @PostMapping("/login")
+    @Operation(summary = "Войти в систему")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         return new LoginResponse(authService.login(request));
     }
 
     /** Регистрация с немедленной выдачей токена; 403, если регистрация выключена, 400, если логин занят. */
     @PostMapping("/register")
+    @Operation(summary = "Зарегистрировать пользователя")
     @ResponseStatus(HttpStatus.CREATED)
     public LoginResponse register(@Valid @RequestBody RegisterRequest request) {
         return new LoginResponse(registrationService.register(request));
@@ -57,6 +62,7 @@ public class AuthController {
 
     /** Отзывает сессию текущего токена. */
     @PostMapping("/logout")
+    @Operation(summary = "Выйти из системы")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout() {
         CurrentUser.sessionId().ifPresent(tokenService::revoke);
@@ -64,12 +70,14 @@ public class AuthController {
 
     /** Текущий пользователь с эффективными грантами (таблицы и действия). */
     @GetMapping("/me")
+    @Operation(summary = "Получить текущего пользователя")
     public CurrentUserDto me() {
         return authService.me();
     }
 
     /** Настройки входа для клиента. */
     @GetMapping("/config")
+    @Operation(summary = "Получить настройки регистрации")
     public AuthConfigDto config() {
         return new AuthConfigDto(properties.passwordRequired(), properties.registration().enabled());
     }
