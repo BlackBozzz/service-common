@@ -21,3 +21,4 @@ com.argent.servicecommon.live.config.ArgentLiveAutoConfiguration
 
 com.argent.servicecommon.docs.config.ArgentDocsAutoConfiguration
 com.argent.servicecommon.docs.openapi.ArgentOpenApiAutoConfiguration
+com.argent.servicecommon.config.validation.ArgentConfigurationValidationAutoConfiguration

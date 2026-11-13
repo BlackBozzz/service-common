@@ -1,226 +1,31 @@
 {
-  "groups": [
-    {
-      "name": "argent.auth",
-      "type": "com.argent.servicecommon.auth.AuthProperties",
-      "description": "Вход, регистрация, bootstrap-администратор, сессии и ключ JWT."
-    },
-    {
-      "name": "argent.security",
-      "type": "com.argent.servicecommon.security.SecurityProperties",
-      "description": "Цепочка фильтров безопасности, открытые пути, CORS и действия для редактора ролей."
-    },
-    {
-      "name": "argent.transfer",
-      "type": "com.argent.servicecommon.transfer.TransferProperties",
-      "description": "Лимиты импорта и экспорта таблиц и стратегия ошибочных строк импорта."
-    },
-    {
-      "name": "argent.attachments",
-      "type": "com.argent.servicecommon.attachment.AttachmentProperties",
-      "description": "Вложения: папка хранилища, наибольший размер файла и разрешённые типы."
-    },
-    {
-      "name": "argent.reports",
-      "type": "com.argent.servicecommon.report.ReportProperties",
-      "description": "Печать отчётов JasperReports: предзагрузка шаблонов, лимиты, локаль и шрифт."
-    }
-  ],
   "properties": [
     {
-      "name": "argent.auth.password-required",
+      "name": "argent.config-validation.enabled",
       "type": "java.lang.Boolean",
-      "description": "Требуется ли пароль при входе; false — вход только по логину (для демо).",
+      "description": "Проверять свойства AtomSkills при запуске, выводить полные пути и примеры заполнения.",
       "defaultValue": true
     },
     {
-      "name": "argent.auth.registration.enabled",
+      "name": "argent.config-validation.unknown-keys",
+      "type": "java.lang.String",
+      "description": "Реакция на незнакомые ключи встроенных argent.* модулей: ignore, warn, error.",
+      "defaultValue": "warn"
+    },
+    {
+      "name": "argent.config-validation.report-on-start",
       "type": "java.lang.Boolean",
-      "description": "Разрешает самостоятельную регистрацию через POST /api/auth/register.",
-      "defaultValue": false
-    },
-    {
-      "name": "argent.auth.registration.default-roles",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Коды существующих ролей, назначаемых пользователю при самостоятельной регистрации.",
-      "defaultValue": []
-    },
-    {
-      "name": "argent.auth.bootstrap-admin.login",
-      "type": "java.lang.String",
-      "description": "Логин администратора, создаваемого при запуске с ролью ADMIN.",
-      "defaultValue": "admin"
-    },
-    {
-      "name": "argent.auth.bootstrap-admin.password",
-      "type": "java.lang.String",
-      "description": "Пароль создаваемого администратора; обязателен в парольном режиме, пока администратора нет.",
-      "defaultValue": ""
-    },
-    {
-      "name": "argent.auth.session-ttl",
-      "type": "java.time.Duration",
-      "description": "Срок действия сессии и её токена.",
-      "defaultValue": "30d"
-    },
-    {
-      "name": "argent.auth.jwt.key-file",
-      "type": "java.nio.file.Path",
-      "description": "PEM-файл (PKCS#8) закрытого RSA-ключа подписи JWT; создаётся, если его нет.",
-      "defaultValue": "./config/argent-jwt.pem"
-    },
-    {
-      "name": "argent.auth.roles-file",
-      "type": "java.lang.String",
-      "description": "JSON-файл стартовых ролей приложения (classpath: или file:); необязателен, ошибка в нём прерывает запуск.",
-      "defaultValue": "classpath:argent-roles.json"
-    },
-    {
-      "name": "argent.auth.roles-file-mode",
-      "type": "com.argent.servicecommon.auth.AuthProperties$RolesFileMode",
-      "description": "create — создавать только отсутствующие роли; overwrite — также приводить существующие к файлу.",
-      "defaultValue": "create"
-    },
-    {
-      "name": "argent.security.enabled",
-      "type": "java.lang.Boolean",
-      "description": "false отключает всю безопасность библиотеки, включая проверку грантов справочников (только для тестов).",
-      "defaultValue": true
-    },
-    {
-      "name": "argent.security.permit-paths",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Дополнительные шаблоны путей, доступные без входа.",
-      "defaultValue": []
-    },
-    {
-      "name": "argent.security.cors.allowed-origins",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Разрешённые источники CORS для /api/**; пусто — CORS не настраивается.",
-      "defaultValue": []
-    },
-    {
-      "name": "argent.security.actions",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Коды действий для подсказок редактора ролей (admin добавляется всегда); на права не влияет.",
-      "defaultValue": []
-    },
-    {
-      "name": "argent.transfer.max-upload-bytes",
-      "type": "java.lang.Long",
-      "description": "Наибольший размер файла импорта в байтах (не больше 536870911); multipart Spring поднимается отдельно.",
-      "defaultValue": 20971520
-    },
-    {
-      "name": "argent.transfer.max-rows",
-      "type": "java.lang.Integer",
-      "description": "Наибольшее число строк на лист импорта и строк экспорта.",
-      "defaultValue": 100000
-    },
-    {
-      "name": "argent.transfer.import-on-error",
-      "type": "com.argent.servicecommon.transfer.TransferProperties$ImportOnError",
-      "description": "Стратегия ошибочных строк импорта: fail-all или skip-row; задаётся только этим свойством.",
-      "defaultValue": "fail-all"
-    },
-    {
-      "name": "argent.transfer.export-max-columns",
-      "type": "java.lang.Integer",
-      "description": "Наибольшее число колонок экспорта.",
-      "defaultValue": 1000
-    },
-    {
-      "name": "argent.transfer.export-max-cells",
-      "type": "java.lang.Long",
-      "description": "Наибольшее число ячеек экспорта (строки × колонки).",
-      "defaultValue": 2000000
-    },
-    {
-      "name": "argent.attachments.enabled",
-      "type": "java.lang.Boolean",
-      "description": "false отключает вложения; папка хранилища не создаётся.",
-      "defaultValue": true
-    },
-    {
-      "name": "argent.attachments.root",
-      "type": "java.lang.String",
-      "description": "Папка файлов вложений (относительно рабочей папки); недоступная папка прерывает запуск.",
-      "defaultValue": "./data/attachments"
-    },
-    {
-      "name": "argent.attachments.max-size-bytes",
-      "type": "java.lang.Long",
-      "description": "Наибольший размер вложения в байтах; multipart Spring поднимается отдельно.",
-      "defaultValue": 20971520
-    },
-    {
-      "name": "argent.attachments.allowed-types",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Разрешённые MIME-типы или префиксы (image/); пусто — любые, кроме блок-листа (HTML, SVG, *+xml, скрипты, исполняемые).",
-      "defaultValue": []
-    },
-    {
-      "name": "argent.reports.preload",
-      "type": "java.util.List<java.lang.String>",
-      "description": "Маски шаблонов JRXML для компиляции при запуске (classpath*:reports/*.jrxml); ошибка в шаблоне прерывает запуск.",
-      "defaultValue": []
-    },
-    {
-      "name": "argent.reports.max-rows",
-      "type": "java.lang.Integer",
-      "description": "Наибольшее число строк отчёта; лишние отбрасываются. Должно быть больше нуля.",
-      "defaultValue": 100000
-    },
-    {
-      "name": "argent.reports.query-timeout",
-      "type": "java.time.Duration",
-      "description": "Таймаут SQL-запроса шаблона; должен быть больше нуля.",
-      "defaultValue": "60s"
-    },
-    {
-      "name": "argent.reports.locale",
-      "type": "java.util.Locale",
-      "description": "Локаль отчётов по умолчанию (числа, даты).",
-      "defaultValue": "ru-RU"
-    },
-    {
-      "name": "argent.reports.default-font",
-      "type": "java.lang.String",
-      "description": "Шрифт по умолчанию с поддержкой кириллицы.",
-      "defaultValue": "DejaVu Sans"
-    },
-    {
-      "name": "argent.reports.watch-files",
-      "type": "java.lang.Boolean",
-      "description": "Перекомпилировать шаблоны из файловой системы при изменении файла.",
+      "description": "Печатать краткую сводку проверки при старте приложения.",
       "defaultValue": true
     }
   ],
   "hints": [
     {
-      "name": "argent.auth.roles-file-mode",
+      "name": "argent.config-validation.unknown-keys",
       "values": [
-        {
-          "value": "create",
-          "description": "Создавать только роли, которых ещё нет по коду; существующие не трогать."
-        },
-        {
-          "value": "overwrite",
-          "description": "Приводить имя, описание и гранты существующих ролей к содержимому файла."
-        }
-      ]
-    },
-    {
-      "name": "argent.transfer.import-on-error",
-      "values": [
-        {
-          "value": "fail-all",
-          "description": "Одна транзакция на лист: при любой ошибке лист откатывается, отчёт содержит все ошибки."
-        },
-        {
-          "value": "skip-row",
-          "description": "Ошибочные строки пропускаются и попадают в отчёт, остальные сохраняются."
-        }
+        {"value": "ignore", "description": "Не сообщать о неизвестных ключах"},
+        {"value": "warn", "description": "Выводить предупреждения (по умолчанию)"},
+        {"value": "error", "description": "Прерывать запуск при неизвестном ключе"}
       ]
     }
   ]
