@@ -3,6 +3,7 @@ package com.argent.servicecommon.queue.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import com.argent.servicecommon.queue.dto.ArgentQueueDto;
+import com.argent.servicecommon.queue.dto.ArgentQueueTaskFilter;
 import com.argent.servicecommon.queue.service.ArgentQueueService;
 import com.argent.servicecommon.security.CurrentUser;
 import org.springframework.http.HttpStatus;
@@ -40,11 +41,23 @@ public class ArgentQueueController {
     @PreAuthorize("@argentAccess.action('queue.read')")
     public ArgentQueueDto.Page<ArgentQueueDto.Task> tasks(@PathVariable UUID queueId,
                                                           @RequestParam(defaultValue = "0") int page,
-                                                          @RequestParam(defaultValue = "20") int size) {
+                                                          @RequestParam(defaultValue = "20") int size,
+                                                          @RequestParam(defaultValue = "all") String view,
+                                                          @RequestParam(required = false) String search,
+                                                          @RequestParam(required = false) String status,
+                                                          @RequestParam(required = false) String handlerKey,
+                                                          @RequestParam(required = false) Integer priority,
+                                                          @RequestParam(required = false) Integer attemptCount,
+                                                          @RequestParam(required = false) Long sequenceNo,
+                                                          @RequestParam(required = false) String lastError,
+                                                          @RequestParam(required = false) String sortField,
+                                                          @RequestParam(required = false) String sortDirection) {
         if (page < 0 || size < 1 || size > 200) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Страница должна быть >= 0, размер 1–200");
         }
-        return service.listTasks(queueId, page, size);
+        return service.listTasks(queueId, page, size, new ArgentQueueTaskFilter(
+                view, search, status, handlerKey, priority, attemptCount, sequenceNo, lastError,
+                sortField, sortDirection));
     }
 
     @GetMapping("/tasks/{taskId}")

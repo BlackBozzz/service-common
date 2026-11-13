@@ -13,7 +13,15 @@ public final class ArgentQueueDto {
 
     public record Task(UUID id, UUID queueId, String handlerKey, String status, int priority,
                        int attemptCount, Instant nextRunAt, Instant createdAt, Instant startedAt,
-                       Instant finishedAt, String lastError, String idempotencyKey) { }
+                       Instant finishedAt, String lastError, String idempotencyKey, long sequenceNo) {
+        /** Для исходного API сохранён старый конструктор. */
+        public Task(UUID id, UUID queueId, String handlerKey, String status, int priority,
+                    int attemptCount, Instant nextRunAt, Instant createdAt, Instant startedAt,
+                    Instant finishedAt, String lastError, String idempotencyKey) {
+            this(id, queueId, handlerKey, status, priority, attemptCount, nextRunAt, createdAt,
+                    startedAt, finishedAt, lastError, idempotencyKey, 0);
+        }
+    }
 
     public record Attempt(long id, int attemptNo, Instant startedAt, Instant finishedAt,
                           String result, String errorType, String errorMessage, String stackTrace) { }

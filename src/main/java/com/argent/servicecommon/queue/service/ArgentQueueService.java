@@ -1,6 +1,7 @@
 package com.argent.servicecommon.queue.service;
 
 import com.argent.servicecommon.queue.dto.ArgentQueueDto;
+import com.argent.servicecommon.queue.dto.ArgentQueueTaskFilter;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
@@ -63,6 +64,10 @@ public class ArgentQueueService {
     public List<ArgentQueueDto.Queue> listQueues() { return store.queues(); }
     public ArgentQueueDto.Page<ArgentQueueDto.Task> listTasks(UUID queueId, int page, int size) {
         return store.tasks(queueId, page, size);
+    }
+    public ArgentQueueDto.Page<ArgentQueueDto.Task> listTasks(
+            UUID queueId, int page, int size, ArgentQueueTaskFilter filter) {
+        return store.tasks(queueId, page, size, filter);
     }
     public ArgentQueueDto.TaskDetails task(UUID id) { return store.details(id); }
     public void pauseQueue(UUID id) { store.pause(id, true); }

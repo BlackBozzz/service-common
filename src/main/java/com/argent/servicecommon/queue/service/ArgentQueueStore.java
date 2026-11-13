@@ -1,6 +1,7 @@
 package com.argent.servicecommon.queue.service;
 
 import com.argent.servicecommon.queue.dto.ArgentQueueDto;
+import com.argent.servicecommon.queue.dto.ArgentQueueTaskFilter;
 import com.argent.servicecommon.live.ArgentLiveTransaction;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,14 +14,18 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Работа с PostgreSQL; захват очереди и запись результата выполняются короткими транзакциями. */
 public class ArgentQueueStore {
     private static final String TASK_FIELDS = "id, queue_id, handler_key, status, priority, attempt_count, "
-            + "next_run_at, created_at, started_at, finished_at, last_error, idempotency_key";
+            + "next_run_at, created_at, started_at, finished_at, last_error, idempotency_key, sequence_no";
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
     private volatile Runnable onQueueChanged = () -> { };
@@ -91,13 +96,148 @@ public class ArgentQueueStore {
                 rs.getLong("retry_wait"), rs.getLong("succeeded"), rs.getLong("cancelled")));
     }
 
+    /** Совместимый метод: весь список, безопасная сортировка исполнения по умолчанию. */
     public ArgentQueueDto.Page<ArgentQueueDto.Task> tasks(UUID queueId, int page, int size) {
+        return tasks(queueId, page, size, ArgentQueueTaskFilter.all());
+    }
+
+    /**
+     * Фильтрация и сортировка выполняются SQL-запросом ДО LIMIT/OFFSET:
+     * AG Grid получает корректный totalElements и настоящую страницу данных.
+     */
+    public ArgentQueueDto.Page<ArgentQueueDto.Task> tasks(
+            UUID queueId, int page, int size, ArgentQueueTaskFilter filter) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректные параметры страницы");
+        }
         requireQueue(queueId);
-        long count = jdbc.queryForObject("SELECT count(*) FROM argent_queue_task WHERE queue_id = ?", Long.class, queueId);
-        List<ArgentQueueDto.Task> data = jdbc.query(
-                "SELECT " + TASK_FIELDS + " FROM argent_queue_task WHERE queue_id = ? ORDER BY sequence_no DESC LIMIT ? OFFSET ?",
-                taskMapper(), queueId, size, (long) page * size);
-        return new ArgentQueueDto.Page<>(data, count, page, size);
+        ArgentQueueTaskFilter actual = filter == null ? ArgentQueueTaskFilter.all() : filter;
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(queueId);
+        StringBuilder where = new StringBuilder(" WHERE t.queue_id = ?");
+
+        String view = actual.view() == null ? "all" : actual.view().trim().toLowerCase(Locale.ROOT);
+        switch (view) {
+            case "", "all" -> { }
+            case "done" -> where.append(" AND t.status = 'SUCCESS'");
+            case "waiting" -> where.append(" AND t.status IN ('PENDING', 'RETRY_WAIT', 'PAUSED')");
+            case "errors" -> where.append(" AND t.status = 'RETRY_WAIT'");
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Неизвестный фильтр задач");
+        }
+
+        String status = blankToNull(actual.status());
+        if (status != null) {
+            if (!TASK_STATUSES.contains(status)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Неизвестный статус задачи");
+            }
+            where.append(" AND t.status = ?");
+            arguments.add(status);
+        }
+        appendContains(where, arguments, "t.handler_key", actual.handlerKey());
+        appendContains(where, arguments, "t.last_error", actual.lastError());
+        if (actual.priority() != null) {
+            where.append(" AND t.priority = ?");
+            arguments.add(actual.priority());
+        }
+        if (actual.sequenceNo() != null) {
+            if (actual.sequenceNo() < 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Номер задачи должен быть положительным");
+            }
+            where.append(" AND t.sequence_no = ?");
+            arguments.add(actual.sequenceNo());
+        }
+        if (actual.attemptCount() != null) {
+            if (actual.attemptCount() < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Количество попыток не может быть отрицательным");
+            }
+            where.append(" AND t.attempt_count = ?");
+            arguments.add(actual.attemptCount());
+        }
+        String search = blankToNull(actual.search());
+        if (search != null) {
+            where.append(" AND (lower(t.handler_key) LIKE ? ESCAPE '!' OR ")
+                    .append("lower(coalesce(t.last_error, '')) LIKE ? ESCAPE '!' OR ")
+                    .append("lower(cast(t.id as text)) LIKE ? ESCAPE '!')");
+            String value = likeValue(search);
+            arguments.add(value);
+            arguments.add(value);
+            arguments.add(value);
+        }
+
+        String from = " FROM argent_queue_task t JOIN argent_queue q ON q.id = t.queue_id";
+        Long count = jdbc.queryForObject("SELECT count(*)" + from + where, Long.class, arguments.toArray());
+        List<Object> pageArguments = new ArrayList<>(arguments);
+        pageArguments.add(size);
+        pageArguments.add((long) page * size);
+        String selectedFields = "t." + TASK_FIELDS.replace(", ", ", t.");
+        String sql = "SELECT " + selectedFields + from + where + taskOrderBy(actual)
+                + " LIMIT ? OFFSET ?";
+        List<ArgentQueueDto.Task> data = jdbc.query(sql, taskMapper(), pageArguments.toArray());
+        return new ArgentQueueDto.Page<>(data, count == null ? 0 : count, page, size);
+    }
+
+    private static final Set<String> TASK_STATUSES = Set.of(
+            "PENDING", "RUNNING", "RETRY_WAIT", "SUCCESS", "PAUSED", "CANCELLED");
+    private static final Map<String, String> TASK_SORT_COLUMNS = Map.of(
+            "handlerKey", "t.handler_key", "status", "t.status", "priority", "t.priority",
+            "attemptCount", "t.attempt_count", "createdAt", "t.created_at",
+            "nextRunAt", "t.next_run_at", "finishedAt", "t.finished_at",
+            "sequenceNo", "t.sequence_no");
+
+    /**
+     * UUID генерируется случайно и не задаёт порядок очереди. sequence_no — монотонный номер постановки.
+     * При allow_skip=true исполнитель сортирует готовые задачи по приоритету и next_run_at;
+     * при allow_skip=false приоритет не обгоняет FIFO. Выполненные — в конце, новые выше старых.
+     */
+    static String taskOrderBy(ArgentQueueTaskFilter filter) {
+        String field = blankToNull(filter.sortField());
+        String direction = blankToNull(filter.sortDirection());
+        StringBuilder order = new StringBuilder(" ORDER BY CASE WHEN t.status IN ")
+                .append("('PENDING','RUNNING','RETRY_WAIT','PAUSED') THEN 0 ELSE 1 END ASC, ");
+        if (field != null) {
+            String column = TASK_SORT_COLUMNS.get(field);
+            if (column == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сортировка по полю запрещена: " + field);
+            }
+            if (direction == null || (!"asc".equalsIgnoreCase(direction) && !"desc".equalsIgnoreCase(direction))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ожидается сортировка asc или desc");
+            }
+            order.append(column).append(" ").append(direction.toUpperCase(Locale.ROOT))
+                    .append(" NULLS LAST, ");
+        } else if (direction != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не указано поле сортировки");
+        } else {
+            // При разрешённом пропуске готовые задачи выше отложенных повторов.
+            // В строгом FIFO readiness не должна нарушать порядок sequence_no.
+            order.append("CASE WHEN q.allow_skip AND t.status IN ")
+                    .append("('PENDING','RUNNING','RETRY_WAIT','PAUSED') THEN CASE WHEN ")
+                    .append("t.status = 'RUNNING' OR (t.status IN ('PENDING','RETRY_WAIT') ")
+                    .append("AND t.next_run_at <= now()) THEN 0 ELSE 1 END END ASC NULLS LAST, ")
+                    .append("CASE WHEN t.status IN ('PENDING','RUNNING','RETRY_WAIT','PAUSED') ")
+                    .append("AND q.allow_skip THEN t.priority END DESC NULLS LAST, ")
+                    .append("CASE WHEN t.status IN ('PENDING','RUNNING','RETRY_WAIT','PAUSED') ")
+                    .append("AND q.allow_skip THEN t.next_run_at END ASC NULLS LAST, ");
+        }
+        return order.append("CASE WHEN t.status IN ('PENDING','RUNNING','RETRY_WAIT','PAUSED') ")
+                .append("THEN t.sequence_no END ASC NULLS LAST, ")
+                .append("CASE WHEN t.status IN ('SUCCESS','CANCELLED') ")
+                .append("THEN t.sequence_no END DESC NULLS LAST, t.id ASC")
+                .toString();
+    }
+
+    private static void appendContains(StringBuilder where, List<Object> arguments, String column, String value) {
+        if (blankToNull(value) == null) return;
+        where.append(" AND lower(").append(column).append(") LIKE ? ESCAPE '!'");
+        arguments.add(likeValue(value));
+    }
+
+    private static String likeValue(String value) {
+        return "%" + value.trim().toLowerCase(Locale.ROOT)
+                .replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public ArgentQueueDto.TaskDetails details(UUID taskId) {
@@ -352,7 +492,7 @@ public class ArgentQueueStore {
                 rs.getString("handler_key"), rs.getString("status"), rs.getInt("priority"),
                 rs.getInt("attempt_count"), instant(rs, "next_run_at"), instant(rs, "created_at"),
                 instant(rs, "started_at"), instant(rs, "finished_at"), rs.getString("last_error"),
-                rs.getString("idempotency_key"));
+                rs.getString("idempotency_key"), rs.getLong("sequence_no"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {
